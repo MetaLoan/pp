@@ -1,0 +1,38 @@
+# Go build
+bin/
+cmd/*/tmp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.o
+
+# Dependency directories
+vendor/
+node_modules/
+web/node_modules/
+
+# Logs & runtime
+*.log
+*.pid
+*.pid.lock
+*.gz
+*.tmp
+/tmp/
+
+# Go coverage
+*.coverprofile
+coverage.*
+
+# Editor/OS
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Build outputs
+web/dist/
