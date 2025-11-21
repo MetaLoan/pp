@@ -15,7 +15,7 @@ func main() {
 
 	// 2. Init Database
 	core.InitDB()
-	
+
 	// 3. Init Market Engine
 	core.InitMarket()
 
@@ -24,7 +24,7 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.Default()
-	
+
 	// Add CORS Middleware
 	r.Use(handler.CORSMiddleware())
 
@@ -46,10 +46,11 @@ func main() {
 		{
 			protected.POST("/trade/order", tradeHandler.PlaceOrder)
 			protected.GET("/trade/orders/active", tradeHandler.GetActiveOrders) // Add this
+			protected.GET("/trade/orders/history", tradeHandler.GetOrderHistory)
 			protected.GET("/wallet/balance", tradeHandler.GetBalance)
 		}
 	}
-	
+
 	// WebSocket Route
 	r.GET("/ws", handler.WSHandler)
 

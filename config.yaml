@@ -22,3 +22,10 @@ log:
 jwt:
   secret: "your-secret-key-change-it"
   expire: 24h
+
+trading:
+  allowedSymbols: ["EURUSD", "BTCUSDT", "ETHUSDT"]
+  minOrderAmount: 1
+  maxOrderAmount: 10000
+  maxOpenOrders: 10
+  dailyLossLimit: 5000  # absolute loss cap per day; 0 to disable

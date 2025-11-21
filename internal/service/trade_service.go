@@ -5,6 +5,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/MetaLoan/pp/internal/config"
 	"github.com/MetaLoan/pp/internal/core"
 	"github.com/MetaLoan/pp/internal/model"
 	"github.com/MetaLoan/pp/internal/repository"
@@ -24,6 +25,19 @@ func NewTradeService() *TradeService {
 }
 
 func (s *TradeService) PlaceOrder(userID int64, symbol, direction string, amount float64, durationSeconds int, clientPrice float64) (*model.Order, error) {
+	if err := s.validateSymbol(symbol); err != nil {
+		return nil, err
+	}
+	if err := s.validateAmount(amount); err != nil {
+		return nil, err
+	}
+	if err := s.enforceOpenOrderLimit(userID); err != nil {
+		return nil, err
+	}
+	if err := s.enforceDailyLossLimit(userID); err != nil {
+		return nil, err
+	}
+
 	// 1. Get Current Price (server view)
 	serverPrice, err := core.GlobalMarket.GetCurrentPrice(symbol)
 	if err != nil {
@@ -89,20 +103,28 @@ func (s *TradeService) SettleOrder(orderID int64) error {
 
 	// Determine Win/Loss
 	isWin := false
+	isDraw := false
 	if order.Direction == "CALL" && closePrice > order.OpenPrice {
 		isWin = true
 	} else if order.Direction == "PUT" && closePrice < order.OpenPrice {
 		isWin = true
+	} else if closePrice == order.OpenPrice {
+		isDraw = true
 	}
 
 	// Calculate PnL and Settlement Amount
 	settlementAmount := 0.0
-	if isWin {
+	switch {
+	case isWin:
 		profit := order.Amount * order.PayoutRate
 		order.PnL = profit
 		order.Status = "won"
 		settlementAmount = order.Amount + profit
-	} else {
+	case isDraw:
+		order.PnL = 0
+		order.Status = "draw"
+		settlementAmount = order.Amount
+	default:
 		order.PnL = -order.Amount
 		order.Status = "lost"
 		settlementAmount = 0.0
@@ -130,4 +152,67 @@ func (s *TradeService) GetActiveOrders(userID int64) ([]model.Order, error) {
 
 func (s *TradeService) GetWallet(userID int64, currency string) (*model.Wallet, error) {
 	return s.walletRepo.GetWallet(userID, currency)
+}
+
+func (s *TradeService) GetOrderHistory(userID int64, status string, limit int) ([]model.Order, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	return s.orderRepo.GetOrdersByUserID(userID, limit, status)
+}
+
+func (s *TradeService) validateSymbol(symbol string) error {
+	cfg := config.GlobalConfig.Trading
+	if len(cfg.AllowedSymbols) == 0 {
+		return nil
+	}
+	for _, s := range cfg.AllowedSymbols {
+		if s == symbol {
+			return nil
+		}
+	}
+	return errors.New("symbol not allowed")
+}
+
+func (s *TradeService) validateAmount(amount float64) error {
+	cfg := config.GlobalConfig.Trading
+	if cfg.MinOrderAmount > 0 && amount < cfg.MinOrderAmount {
+		return errors.New("amount below minimum")
+	}
+	if cfg.MaxOrderAmount > 0 && amount > cfg.MaxOrderAmount {
+		return errors.New("amount exceeds maximum")
+	}
+	return nil
+}
+
+func (s *TradeService) enforceOpenOrderLimit(userID int64) error {
+	cfg := config.GlobalConfig.Trading
+	if cfg.MaxOpenOrders <= 0 {
+		return nil
+	}
+	count, err := s.orderRepo.CountOpenOrders(userID)
+	if err != nil {
+		return err
+	}
+	if int(count) >= cfg.MaxOpenOrders {
+		return errors.New("too many open orders")
+	}
+	return nil
+}
+
+func (s *TradeService) enforceDailyLossLimit(userID int64) error {
+	cfg := config.GlobalConfig.Trading
+	if cfg.DailyLossLimit <= 0 {
+		return nil
+	}
+	startOfDay := time.Now().Truncate(24 * time.Hour)
+	pnl, err := s.orderRepo.SumPnLSince(userID, startOfDay)
+	if err != nil {
+		return err
+	}
+	// pnl negative means loss
+	if pnl <= -cfg.DailyLossLimit {
+		return errors.New("daily loss limit reached")
+	}
+	return nil
 }

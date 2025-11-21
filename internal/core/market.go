@@ -31,6 +31,7 @@ type MarketEngine struct {
 var GlobalMarket *MarketEngine
 
 func InitMarket() {
+	rand.Seed(time.Now().UnixNano())
 	GlobalMarket = &MarketEngine{
 		subscribers: make(map[*websocket.Conn]bool),
 		broadcast:   make(chan []byte),
@@ -81,32 +82,50 @@ func (m *MarketEngine) Unregister(conn *websocket.Conn) {
 
 // generateMockData simulates market data updates
 func (m *MarketEngine) generateMockData() {
-	ticker := time.NewTicker(1 * time.Second)
-	price := 1.0500 // Initial EUR/USD price
+	// Simple multi-symbol random walk
+	initialPrices := map[string]float64{
+		"EURUSD":  1.0500,
+		"BTCUSDT": 65000,
+		"ETHUSDT": 3200,
+	}
 
-	for range ticker.C {
-		// Random walk
-		change := (rand.Float64() - 0.5) * 0.0010
-		price += change
+	for symbol, startPrice := range initialPrices {
+		go func(sym string, price float64) {
+			ticker := time.NewTicker(1 * time.Second)
+			defer ticker.Stop()
+			for range ticker.C {
+				// Random walk with symbol-specific volatility
+				step := (rand.Float64() - 0.5)
+				switch sym {
+				case "EURUSD":
+					price += step * 0.0010
+				case "BTCUSDT":
+					price += step * 50
+				case "ETHUSDT":
+					price += step * 2.5
+				default:
+					price += step * 0.1
+				}
 
-		data := MarketData{
-			Symbol:    "EURUSD",
-			Price:     price,
-			Timestamp: time.Now().UnixMilli(),
-		}
+				data := MarketData{
+					Symbol:    sym,
+					Price:     price,
+					Timestamp: time.Now().UnixMilli(),
+				}
 
-		// Cache latest price for API usage
-		m.mu.Lock()
-		m.lastPrice[data.Symbol] = data
-		m.mu.Unlock()
+				m.mu.Lock()
+				m.lastPrice[data.Symbol] = data
+				m.mu.Unlock()
 
-		msg, err := json.Marshal(data)
-		if err != nil {
-			log.Println("Error marshaling market data:", err)
-			continue
-		}
+				msg, err := json.Marshal(data)
+				if err != nil {
+					log.Println("Error marshaling market data:", err)
+					continue
+				}
 
-		m.broadcast <- msg
+				m.broadcast <- msg
+			}
+		}(symbol, startPrice)
 	}
 }
 

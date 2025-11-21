@@ -3,11 +3,14 @@ import api from '../api/axios';
 
 export const useMarketStore = defineStore('market', {
   state: () => ({
+    allowedSymbols: ['EURUSD', 'BTCUSDT', 'ETHUSDT'],
+    selectedSymbol: 'EURUSD',
     currentPrice: 0,
     priceHistory: [], // Array of { time, value } for chart
     isConnected: false,
     socket: null,
     activeOrders: [],
+    orderHistory: [],
     balance: 0,
     balanceCurrency: 'USDT',
   }),
@@ -32,13 +35,18 @@ export const useMarketStore = defineStore('market', {
         try {
           const data = JSON.parse(event.data);
           // data format: { symbol: "EURUSD", price: 1.0503, timestamp: 1716288000000 }
-          
+
+          if (data.symbol !== this.selectedSymbol) {
+            // Ignore other symbols for now; could be extended to per-symbol cache
+            return;
+          }
+
           this.currentPrice = data.price;
-          
+
           // Convert timestamp to seconds for lightweight-charts
           // Ensure integer seconds to avoid sub-second issues with standard scale
           const time = Math.floor(data.timestamp / 1000);
-          
+
           // Avoid duplicates if we get multiple updates in same second
           if (this.priceHistory.length > 0) {
             const lastTime = this.priceHistory[this.priceHistory.length - 1].time;
@@ -80,6 +88,13 @@ export const useMarketStore = defineStore('market', {
         this.socket = null;
       }
     },
+    setSymbol(symbol) {
+      if (this.allowedSymbols.includes(symbol)) {
+        this.selectedSymbol = symbol;
+        this.currentPrice = 0;
+        this.priceHistory = [];
+      }
+    },
     async placeOrder(symbol, direction, amount, duration) {
       try {
         const response = await api.post('/trade/order', {
@@ -101,6 +116,14 @@ export const useMarketStore = defineStore('market', {
         this.activeOrders = response.data.orders;
       } catch (error) {
         console.error('Failed to fetch orders:', error);
+      }
+    },
+    async fetchOrderHistory({ status = '', limit = 20 } = {}) {
+      try {
+        const response = await api.get('/trade/orders/history', { params: { status, limit } });
+        this.orderHistory = response.data.orders;
+      } catch (error) {
+        console.error('Failed to fetch order history:', error);
       }
     },
     async fetchBalance(currency = 'USDT') {

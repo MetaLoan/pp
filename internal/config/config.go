@@ -11,6 +11,7 @@ type Config struct {
 	Redis    RedisConfig
 	Log      LogConfig
 	JWT      JWTConfig
+	Trading  TradingConfig
 }
 
 type ServerConfig struct {
@@ -41,6 +42,14 @@ type LogConfig struct {
 type JWTConfig struct {
 	Secret string
 	Expire string
+}
+
+type TradingConfig struct {
+	AllowedSymbols []string
+	MinOrderAmount float64
+	MaxOrderAmount float64
+	MaxOpenOrders  int
+	DailyLossLimit float64
 }
 
 var GlobalConfig Config

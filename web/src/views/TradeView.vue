@@ -4,15 +4,26 @@
 
     <div class="controls-section">
       <div class="price-display">
-        <h3>EUR/USD</h3>
+        <div class="symbol-row">
+          <label for="symbol">Symbol</label>
+          <select id="symbol" v-model="selectedSymbol">
+            <option v-for="sym in marketStore.allowedSymbols" :key="sym" :value="sym">
+              {{ symbolLabel(sym) }}
+            </option>
+          </select>
+        </div>
+        <h3>{{ symbolLabel(selectedSymbol) }}</h3>
         <div class="current-price" :class="{ up: isPriceUp, down: !isPriceUp }">
-          {{ currentPrice ? currentPrice.toFixed(5) : '--' }}
+          {{ formattedPrice }}
         </div>
       </div>
 
       <div class="trade-form">
         <div class="balance">
           Balance: {{ balanceDisplay }}
+        </div>
+        <div v-if="errorMsg" class="alert">
+          {{ errorMsg }}
         </div>
         <div class="form-group">
           <label>Amount ($)</label>
@@ -39,20 +50,54 @@
         </div>
       </div>
 
-      <div class="positions-list">
-        <h3>Active Positions</h3>
-        <div v-if="activeOrders.length === 0" class="no-orders">No active trades</div>
-        <div v-else class="order-item" v-for="order in activeOrders" :key="order.id">
-          <div class="order-header">
-            <span class="symbol">{{ order.asset_symbol }}</span>
-            <span :class="['direction', order.direction.toLowerCase()]">{{ order.direction }}</span>
+      <div class="positions-card">
+        <div class="tab-header">
+          <button
+            :class="['tab', currentTab === 'active' ? 'active' : '']"
+            @click="currentTab = 'active'"
+          >
+            Active ({{ activeOrders.length }})
+          </button>
+          <button
+            :class="['tab', currentTab === 'recent' ? 'active' : '']"
+            @click="currentTab = 'recent'"
+          >
+            Recent ({{ orderHistory.length }})
+          </button>
+        </div>
+
+        <div v-if="currentTab === 'active'" class="positions-list">
+          <div v-if="activeOrders.length === 0" class="no-orders">No active trades</div>
+          <div v-else class="order-item" v-for="order in activeOrders" :key="order.id">
+            <div class="order-header">
+              <span class="symbol">{{ order.asset_symbol }}</span>
+              <span :class="['direction', order.direction.toLowerCase()]">{{ order.direction }}</span>
+            </div>
+            <div class="order-details">
+              <div>Entry: {{ formatPrice(order.open_price, order.asset_symbol) }}</div>
+              <div>Amount: ${{ order.amount }}</div>
+              <div class="timer">Time Left: {{ getTimeLeft(order) }}s</div>
+              <div class="pnl" :class="getPnlClass(order)">
+                Est. PnL: {{ getEstimatedPnl(order) }}
+              </div>
+            </div>
           </div>
-          <div class="order-details">
-            <div>Entry: {{ order.open_price.toFixed(5) }}</div>
-            <div>Amount: ${{ order.amount }}</div>
-            <div class="timer">Time Left: {{ getTimeLeft(order) }}s</div>
-            <div class="pnl" :class="getPnlClass(order)">
-              Est. PnL: {{ getEstimatedPnl(order) }}
+        </div>
+
+        <div v-else class="positions-list recent">
+          <div v-if="orderHistory.length === 0" class="no-orders">No history yet</div>
+          <div v-else class="order-item" v-for="order in orderHistory" :key="order.id">
+            <div class="order-header">
+              <span class="symbol">{{ order.asset_symbol }}</span>
+              <span class="status" :class="statusClass(order.status)">{{ order.status }}</span>
+            </div>
+            <div class="order-details">
+              <div>Direction: <strong :class="['direction', order.direction.toLowerCase()]">{{ order.direction }}</strong></div>
+              <div>Entry: {{ formatPrice(order.open_price, order.asset_symbol) }}</div>
+              <div>Exit: {{ order.close_price ? formatPrice(order.close_price, order.asset_symbol) : '--' }}</div>
+              <div>Amount: ${{ order.amount }}</div>
+              <div>PnL: <span :class="statusClass(order.status)">{{ formatPnl(order) }}</span></div>
+              <div>Closed: {{ order.close_time ? new Date(order.close_time).toLocaleTimeString() : '--' }}</div>
             </div>
           </div>
         </div>
@@ -72,14 +117,45 @@ const marketStore = useMarketStore();
 const amount = ref(10);
 const duration = ref(30);
 const isPriceUp = ref(true);
+const errorMsg = ref('');
+const currentTab = ref('active');
 let chart;
 let lineSeries;
 let resizeObserver;
 let timerInterval;
+let historyInterval;
 
 const currentPrice = computed(() => marketStore.currentPrice);
 const activeOrders = computed(() => marketStore.activeOrders);
+const orderHistory = computed(() => marketStore.orderHistory);
 const balanceDisplay = computed(() => `${marketStore.balanceCurrency} ${marketStore.balance.toFixed(2)}`);
+const selectedSymbol = computed({
+  get: () => marketStore.selectedSymbol,
+  set: (val) => marketStore.setSymbol(val),
+});
+
+const symbolLabel = (sym) => {
+  const labels = {
+    EURUSD: 'EUR/USD',
+    BTCUSDT: 'BTC/USDT',
+    ETHUSDT: 'ETH/USDT',
+  };
+  return labels[sym] || sym;
+};
+
+const pricePrecision = computed(() => {
+  const precisionMap = {
+    EURUSD: 5,
+    BTCUSDT: 1,
+    ETHUSDT: 2,
+  };
+  return precisionMap[selectedSymbol.value] || 4;
+});
+
+const formattedPrice = computed(() => {
+  if (!currentPrice.value) return '--';
+  return currentPrice.value.toFixed(pricePrecision.value);
+});
 
 const getTimeLeft = (order) => {
   const closeTime = new Date(order.close_time).getTime();
@@ -100,6 +176,31 @@ const getPnlClass = (order) => {
   if (!price) return '';
   const isWin = order.direction === 'CALL' ? price > order.open_price : price < order.open_price;
   return isWin ? 'win' : 'loss';
+};
+
+const statusClass = (status) => {
+  if (status === 'won') return 'win';
+  if (status === 'lost') return 'loss';
+  if (status === 'draw') return 'draw';
+  if (status === 'active' || status === 'pending') return 'pending';
+  return '';
+};
+
+const formatPrice = (price, symbol) => {
+  const precisionMap = {
+    EURUSD: 5,
+    BTCUSDT: 1,
+    ETHUSDT: 2,
+  };
+  const prec = precisionMap[symbol] || 4;
+  return price ? Number(price).toFixed(prec) : '--';
+};
+
+const formatPnl = (order) => {
+  if (order.status === 'won') return `+$${order.pnl.toFixed(2)}`;
+  if (order.status === 'lost') return `-$${Math.abs(order.pnl).toFixed(2)}`;
+  if (order.status === 'draw') return '$0.00';
+  return '--';
 };
 
 const applyHistoryToSeries = (history) => {
@@ -134,6 +235,20 @@ watch(
   { deep: true }
 );
 
+watch(
+  () => selectedSymbol.value,
+  () => {
+    if (lineSeries) {
+      lineSeries.setData([]);
+      lineSeries.applyOptions({
+        priceFormat: { type: 'price', precision: pricePrecision.value, minMove: 1 / Math.pow(10, pricePrecision.value) },
+      });
+    }
+    marketStore.fetchActiveOrders();
+    marketStore.fetchOrderHistory({ limit: 20 });
+  }
+);
+
 onMounted(async () => {
   await nextTick();
   if (!chartContainer.value) return;
@@ -151,7 +266,7 @@ onMounted(async () => {
     lineSeries = chart.addSeries(LineSeries, {
       color: '#2962FF',
       lineWidth: 2,
-      priceFormat: { type: 'price', precision: 5, minMove: 0.00001 },
+      priceFormat: { type: 'price', precision: pricePrecision.value, minMove: 1 / Math.pow(10, pricePrecision.value) },
     });
   } catch (err) {
     console.error('Failed to create line series', err);
@@ -171,11 +286,16 @@ onMounted(async () => {
   marketStore.connect();
   marketStore.fetchActiveOrders();
   marketStore.fetchBalance();
+  marketStore.fetchOrderHistory({ limit: 20 });
 
   timerInterval = setInterval(() => {
     marketStore.fetchActiveOrders();
     marketStore.fetchBalance();
   }, 1000);
+
+  historyInterval = setInterval(() => {
+    marketStore.fetchOrderHistory({ limit: 20 });
+  }, 5000);
 
   window.addEventListener('resize', handleResize);
 });
@@ -185,6 +305,7 @@ onUnmounted(() => {
   if (chart) chart.remove();
   if (resizeObserver && chartContainer.value) resizeObserver.unobserve(chartContainer.value);
   clearInterval(timerInterval);
+  clearInterval(historyInterval);
   window.removeEventListener('resize', handleResize);
 });
 
@@ -198,12 +319,13 @@ const handleResize = () => {
 };
 
 const handleTrade = async (direction) => {
+  errorMsg.value = '';
   try {
-    await marketStore.placeOrder('EURUSD', direction, amount.value, duration.value);
+    await marketStore.placeOrder(selectedSymbol.value, direction, amount.value, duration.value);
     marketStore.fetchActiveOrders();
     marketStore.fetchBalance();
   } catch (error) {
-    alert('Failed to place order: ' + (error.response?.data?.error || error.message));
+    errorMsg.value = error.response?.data?.error || error.message || 'Failed to place order';
   }
 };
 </script>
@@ -228,6 +350,40 @@ const handleTrade = async (direction) => {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  overflow-y: auto;
+}
+
+.positions-card {
+  border-top: 1px solid #2b2b43;
+  padding-top: 10px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tab-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.tab {
+  padding: 10px;
+  background: #1e222d;
+  border: 1px solid #2b2b43;
+  color: #b2b5be;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  font-weight: 600;
+}
+
+.tab.active {
+  background: #2962ff;
+  color: #fff;
+  border-color: #2962ff;
 }
 
 .price-display {
@@ -316,6 +472,14 @@ button:hover {
   border-top: 1px solid #2b2b43;
   padding-top: 20px;
   flex: 1;
+  min-height: 220px;
+  overflow-y: auto;
+}
+
+.positions-list.recent {
+  border-top: none;
+  padding-top: 0;
+  max-height: 240px;
   overflow-y: auto;
 }
 
@@ -356,5 +520,52 @@ button:hover {
 
 .pnl.loss {
   color: #d63031;
+}
+
+.status.win {
+  color: #00b894;
+}
+
+.status.loss {
+  color: #d63031;
+}
+
+.status.draw {
+  color: #e5c07b;
+}
+
+.status.pending {
+  color: #61dafb;
+}
+
+.symbol-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.symbol-row label {
+  font-size: 0.9em;
+  color: #b2b5be;
+}
+
+.symbol-row select {
+  flex: 1;
+  background: #2b2b43;
+  border: 1px solid #43435c;
+  color: #fff;
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.alert {
+  padding: 10px;
+  background: #2b1f1f;
+  border: 1px solid #d63031;
+  color: #ffb3b3;
+  border-radius: 4px;
+  font-size: 0.9em;
 }
 </style>

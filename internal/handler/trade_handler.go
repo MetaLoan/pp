@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/MetaLoan/pp/internal/model"
 	"github.com/MetaLoan/pp/internal/service"
@@ -19,11 +20,11 @@ func NewTradeHandler() *TradeHandler {
 }
 
 type PlaceOrderRequest struct {
-	Symbol    string  `json:"symbol" binding:"required"`
-	Direction string  `json:"direction" binding:"required,oneof=CALL PUT"`
-	Amount    float64 `json:"amount" binding:"required,gt=0"`
-	Duration  int     `json:"duration" binding:"required,min=30"` // seconds
-	ClientPrice float64 `json:"client_price"` // optional: price user saw on UI
+	Symbol      string  `json:"symbol" binding:"required"`
+	Direction   string  `json:"direction" binding:"required,oneof=CALL PUT"`
+	Amount      float64 `json:"amount" binding:"required,gt=0"`
+	Duration    int     `json:"duration" binding:"required,min=30"` // seconds
+	ClientPrice float64 `json:"client_price"`                       // optional: price user saw on UI
 }
 
 func (h *TradeHandler) PlaceOrder(c *gin.Context) {
@@ -87,4 +88,29 @@ func (h *TradeHandler) GetBalance(c *gin.Context) {
 		"balance":  wallet.Balance,
 		"frozen":   wallet.Frozen,
 	})
+}
+
+func (h *TradeHandler) GetOrderHistory(c *gin.Context) {
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID := user.(*model.User).ID
+
+	status := c.Query("status")
+	limit := 0
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil {
+			limit = parsed
+		}
+	}
+
+	orders, err := h.tradeService.GetOrderHistory(userID, status, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"orders": orders})
 }
