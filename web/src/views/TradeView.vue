@@ -137,17 +137,6 @@
                 <button class="tool-btn" :class="{ active: activeMenu === 'drawing' }" @click="toggleMenu('drawing')">
                   <PenTool :size="18" />
                 </button>
-                <div v-if="activeMenu === 'drawing'" class="tool-dropdown drawing-menu">
-                  <div 
-                    v-for="tool in drawingTools" 
-                    :key="tool.id" 
-                    class="drawing-item"
-                    @click="startDrawing(tool.id)"
-                  >
-                    <component :is="tool.icon" :size="16" />
-                    <span>{{ tool.label }}</span>
-                  </div>
-                </div>
               </div>
 
               <!-- More & Grid -->
@@ -177,6 +166,28 @@
                 <span class="legend-dot up"></span>Uptrend
                 <span class="legend-dot down"></span>Downtrend
               </div>
+            </div>
+          </div>
+
+          <!-- Floating Drawing Tools Panel -->
+          <div v-if="activeMenu === 'drawing'" class="floating-tools-panel">
+            <div class="panel-header">
+              <span class="panel-title">Drawing Tools</span>
+              <button class="panel-close" @click="activeMenu = null">
+                <X :size="16" />
+              </button>
+            </div>
+            <div class="tools-grid">
+              <button 
+                v-for="tool in drawingTools" 
+                :key="tool.id" 
+                class="tool-grid-item"
+                @click="startDrawing(tool.id)"
+                :title="tool.label"
+              >
+                <component :is="tool.icon" :size="20" />
+                <span class="tool-label">{{ tool.label }}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -2136,5 +2147,95 @@ const handleWithdraw = async () => {
 .drawing-item:hover {
   background: rgba(255, 255, 255, 0.05);
   color: #fff;
+}
+
+/* Floating Tools Panel */
+.floating-tools-panel {
+  position: absolute;
+  top: 70px;
+  left: 20px;
+  width: 280px;
+  background: rgba(18, 20, 28, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(20px);
+  z-index: 50;
+  overflow: hidden;
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.panel-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.panel-close {
+  background: transparent;
+  border: none;
+  color: #8fa1c4;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.panel-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 12px;
+}
+
+.tool-grid-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 12px 4px;
+  color: #8fa1c4;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tool-grid-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.tool-grid-item .tool-label {
+  font-size: 10px;
+  text-align: center;
+  line-height: 1.2;
 }
 </style>
