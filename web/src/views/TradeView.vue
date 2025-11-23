@@ -45,67 +45,6 @@
                   <BarChart2 :size="18" />
                   <span class="tool-badge">{{ timeframeLabel(timeframe) }}</span>
                 </button>
-                <div v-if="activeMenu === 'chart'" class="tool-dropdown chart-menu">
-                  <div class="menu-section">
-                    <div class="menu-label">Chart Type</div>
-                    <div class="type-grid">
-                      <button 
-                        v-for="type in ['line', 'candle', 'area']" 
-                        :key="type"
-                        :class="['type-btn', chartType === type ? 'active' : '']"
-                        @click="chartType = type"
-                      >
-                        <LineChart v-if="type === 'line'" :size="20" />
-                        <BarChart2 v-if="type === 'candle'" :size="20" />
-                        <Activity v-if="type === 'area'" :size="20" />
-                        <span>{{ type.charAt(0).toUpperCase() + type.slice(1) }}</span>
-                      </button>
-                      <button class="type-btn disabled" title="Coming soon">
-                        <Activity :size="20" />
-                        <span>Heikin Ashi</span>
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div class="menu-section">
-                    <div class="menu-label">Timeframe</div>
-                    <div class="tf-grid">
-                      <button 
-                        v-for="tf in timeframesConfig" 
-                        :key="tf.value"
-                        :class="['tf-btn', timeframe === tf.value ? 'active' : '']"
-                        @click="timeframe = tf.value"
-                      >
-                        {{ tf.label }}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="menu-section">
-                    <div class="menu-label">Settings</div>
-                    <div class="settings-list">
-                      <label class="setting-row">
-                        <span>Enable Timer</span>
-                        <div class="toggle" :class="{ active: settings.timer }" @click="settings.timer = !settings.timer">
-                          <div class="toggle-handle"></div>
-                        </div>
-                      </label>
-                      <label class="setting-row">
-                        <span>Enable Auto Scroll</span>
-                        <div class="toggle" :class="{ active: settings.autoScroll }" @click="settings.autoScroll = !settings.autoScroll">
-                          <div class="toggle-handle"></div>
-                        </div>
-                      </label>
-                      <label class="setting-row">
-                        <span>Enable Grid Snap</span>
-                        <div class="toggle" :class="{ active: settings.gridSnap }" @click="settings.gridSnap = !settings.gridSnap">
-                          <div class="toggle-handle"></div>
-                        </div>
-                      </label>
-                    </div>
-                    <div class="custom-color-link">Custom Candle Color</div>
-                  </div>
-                </div>
               </div>
 
               <!-- Indicators Menu -->
@@ -113,23 +52,6 @@
                 <button class="tool-btn" :class="{ active: activeMenu === 'indicators' }" @click="toggleMenu('indicators')">
                   <Sliders :size="18" />
                 </button>
-                <div v-if="activeMenu === 'indicators'" class="tool-dropdown indicators-menu">
-                  <div class="indicators-grid">
-                    <div 
-                      v-for="ind in indicatorsList" 
-                      :key="ind" 
-                      class="indicator-item"
-                      @click="
-                        ind === 'Moving Average' ? (showSMA = !showSMA) : 
-                        ind === 'Exponential Moving Average' ? (showEMA = !showEMA) : null
-                      "
-                    >
-                      <div class="star-icon">☆</div>
-                      <span>{{ ind }}</span>
-                      <div v-if="(ind === 'Moving Average' && showSMA) || (ind === 'Exponential Moving Average' && showEMA)" class="active-dot"></div>
-                    </div>
-                  </div>
-                </div>
               </div>
 
               <!-- Drawing Menu -->
@@ -169,25 +91,112 @@
             </div>
           </div>
 
-          <!-- Floating Drawing Tools Panel -->
-          <div v-if="activeMenu === 'drawing'" class="floating-tools-panel">
+          <!-- Unified Floating Side Panel -->
+          <div v-if="activeMenu" class="floating-side-panel">
             <div class="panel-header">
-              <span class="panel-title">Drawing Tools</span>
+              <span class="panel-title">{{ menuTitle }}</span>
               <button class="panel-close" @click="activeMenu = null">
                 <X :size="16" />
               </button>
             </div>
-            <div class="tools-grid">
-              <button 
-                v-for="tool in drawingTools" 
-                :key="tool.id" 
-                class="tool-grid-item"
-                @click="startDrawing(tool.id)"
-                :title="tool.label"
-              >
-                <component :is="tool.icon" :size="20" />
-                <span class="tool-label">{{ tool.label }}</span>
-              </button>
+            <div class="panel-content">
+              <!-- Chart Settings Content -->
+              <div v-if="activeMenu === 'chart'" class="chart-menu-content">
+                <div class="menu-section">
+                  <div class="menu-label">Chart Type</div>
+                  <div class="type-grid">
+                    <button 
+                      v-for="type in ['line', 'candle', 'area']" 
+                      :key="type"
+                      :class="['type-btn', chartType === type ? 'active' : '']"
+                      @click="chartType = type"
+                    >
+                      <LineChart v-if="type === 'line'" :size="20" />
+                      <BarChart2 v-if="type === 'candle'" :size="20" />
+                      <Activity v-if="type === 'area'" :size="20" />
+                      <span>{{ type.charAt(0).toUpperCase() + type.slice(1) }}</span>
+                    </button>
+                    <button class="type-btn disabled" title="Coming soon">
+                      <Activity :size="20" />
+                      <span>Heikin Ashi</span>
+                    </button>
+                  </div>
+                </div>
+                
+                <div class="menu-section">
+                  <div class="menu-label">Timeframe</div>
+                  <div class="tf-grid">
+                    <button 
+                      v-for="tf in timeframesConfig" 
+                      :key="tf.value"
+                      :class="['tf-btn', timeframe === tf.value ? 'active' : '']"
+                      @click="timeframe = tf.value"
+                    >
+                      {{ tf.label }}
+                    </button>
+                  </div>
+                </div>
+
+                <div class="menu-section">
+                  <div class="menu-label">Settings</div>
+                  <div class="settings-list">
+                    <label class="setting-row">
+                      <span>Enable Timer</span>
+                      <div class="toggle" :class="{ active: settings.timer }" @click="settings.timer = !settings.timer">
+                        <div class="toggle-handle"></div>
+                      </div>
+                    </label>
+                    <label class="setting-row">
+                      <span>Enable Auto Scroll</span>
+                      <div class="toggle" :class="{ active: settings.autoScroll }" @click="settings.autoScroll = !settings.autoScroll">
+                        <div class="toggle-handle"></div>
+                      </div>
+                    </label>
+                    <label class="setting-row">
+                      <span>Enable Grid Snap</span>
+                      <div class="toggle" :class="{ active: settings.gridSnap }" @click="settings.gridSnap = !settings.gridSnap">
+                        <div class="toggle-handle"></div>
+                      </div>
+                    </label>
+                  </div>
+                  <div class="custom-color-link">Custom Candle Color</div>
+                </div>
+              </div>
+
+              <!-- Indicators Content -->
+              <div v-if="activeMenu === 'indicators'" class="indicators-menu-content">
+                <div class="indicators-grid">
+                  <div 
+                    v-for="ind in indicatorsList" 
+                    :key="ind" 
+                    class="indicator-item"
+                    @click="
+                      ind === 'Moving Average' ? (showSMA = !showSMA) : 
+                      ind === 'Exponential Moving Average' ? (showEMA = !showEMA) : null
+                    "
+                  >
+                    <div class="star-icon">☆</div>
+                    <span>{{ ind }}</span>
+                    <div v-if="(ind === 'Moving Average' && showSMA) || (ind === 'Exponential Moving Average' && showEMA)" class="active-dot"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Drawing Tools Content -->
+              <div v-if="activeMenu === 'drawing'" class="drawing-menu-content">
+                <div class="tools-grid">
+                  <button 
+                    v-for="tool in drawingTools" 
+                    :key="tool.id" 
+                    class="tool-grid-item"
+                    @click="startDrawing(tool.id)"
+                    :title="tool.label"
+                  >
+                    <component :is="tool.icon" :size="20" />
+                    <span class="tool-label">{{ tool.label }}</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -396,6 +405,15 @@ const activeMenu = ref(null); // 'chart', 'indicators', 'drawing', 'more'
 const toggleMenu = (menu) => {
   activeMenu.value = activeMenu.value === menu ? null : menu;
 };
+
+const menuTitle = computed(() => {
+  switch (activeMenu.value) {
+    case 'chart': return 'Chart Settings';
+    case 'indicators': return 'Indicators';
+    case 'drawing': return 'Drawing Tools';
+    default: return '';
+  }
+});
 
 // Configuration Lists
 const timeframesConfig = [
@@ -2197,13 +2215,6 @@ const handleWithdraw = async () => {
   border-radius: 6px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.panel-close:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
 }
 
 .tools-grid {
