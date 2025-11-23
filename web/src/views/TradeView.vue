@@ -1247,37 +1247,39 @@ const handleWithdraw = async () => {
 }
 
 .chart-toolbar {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  right: 24px;
+  z-index: 20;
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  align-items: center;
-  margin-bottom: 16px;
-  background: rgba(12, 16, 27, 0.4);
-  padding: 8px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  align-items: flex-start;
+  pointer-events: none;
 }
 
-.symbol-block {
+.symbol-block, .toolbar-actions {
+  pointer-events: auto;
+  background: rgba(12, 16, 27, 0.8);
+  backdrop-filter: blur(12px);
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
+  gap: 4px;
   align-items: center;
-  gap: 12px;
-}
-
-.symbol-select-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
 .symbol-select-wrapper select {
   appearance: none;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent !important;
+  border: none !important;
   color: #fff;
-  padding: 10px 36px 10px 14px;
-  border-radius: 10px;
-  min-width: 160px;
+  padding: 8px 32px 8px 12px;
+  border-radius: 8px;
+  min-width: 140px;
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
@@ -1285,8 +1287,7 @@ const handleWithdraw = async () => {
 }
 
 .symbol-select-wrapper select:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .select-arrow {
@@ -2237,5 +2238,25 @@ const handleWithdraw = async () => {
   font-size: 10px;
   text-align: center;
   line-height: 1.2;
+}
+
+/* Immersive Toolbar Overrides */
+.tool-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: #8fa1c4;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  height: 32px;
+}
+
+.tool-btn:hover, .tool-btn.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 </style>
