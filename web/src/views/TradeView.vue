@@ -36,63 +36,130 @@
                 </select>
                 <ChevronDown class="select-arrow" :size="16" />
               </div>
-              <div class="price-group">
-                <div class="price-ticker" :class="{ up: isPriceUp, down: !isPriceUp }">
-                  {{ formattedPrice }}
-                  <component :is="isPriceUp ? TrendingUp : TrendingDown" :size="20" />
-                </div>
-                <div class="market-stats">
-                  <div class="stat-item" :class="marketStats.change >= 0 ? 'up' : 'down'">
-                    <span class="stat-label">24h Chg</span>
-                    <span class="stat-value">
-                      {{ marketStats.change >= 0 ? '+' : '' }}{{ marketStats.change.toFixed(pricePrecision) }} 
-                      ({{ marketStats.changePercent.toFixed(2) }}%)
-                    </span>
-                  </div>
-                  <div class="stat-item">
-                    <span class="stat-label">24h High</span>
-                    <span class="stat-value">{{ marketStats.high.toFixed(pricePrecision) }}</span>
-                  </div>
-                  <div class="stat-item">
-                    <span class="stat-label">24h Low</span>
-                    <span class="stat-value">{{ marketStats.low.toFixed(pricePrecision) }}</span>
-                  </div>
-                </div>
-              </div>
             </div>
 
-            <div class="toolbar-right">
-              <div class="countdown-chip">
-                <Clock :size="14" />
-                <span>{{ candleCountdown }}</span>
+            <div class="toolbar-actions">
+              <!-- Chart & Timeframe Menu -->
+              <div class="tool-wrapper">
+                <button class="tool-btn" :class="{ active: activeMenu === 'chart' }" @click="toggleMenu('chart')">
+                  <BarChart2 :size="18" />
+                  <span class="tool-badge">{{ timeframeLabel(timeframe) }}</span>
+                </button>
+                <div v-if="activeMenu === 'chart'" class="tool-dropdown chart-menu">
+                  <div class="menu-section">
+                    <div class="menu-label">Chart Type</div>
+                    <div class="type-grid">
+                      <button 
+                        v-for="type in ['line', 'candle', 'area']" 
+                        :key="type"
+                        :class="['type-btn', chartType === type ? 'active' : '']"
+                        @click="chartType = type"
+                      >
+                        <LineChart v-if="type === 'line'" :size="20" />
+                        <BarChart2 v-if="type === 'candle'" :size="20" />
+                        <Activity v-if="type === 'area'" :size="20" />
+                        <span>{{ type.charAt(0).toUpperCase() + type.slice(1) }}</span>
+                      </button>
+                      <button class="type-btn disabled" title="Coming soon">
+                        <Activity :size="20" />
+                        <span>Heikin Ashi</span>
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div class="menu-section">
+                    <div class="menu-label">Timeframe</div>
+                    <div class="tf-grid">
+                      <button 
+                        v-for="tf in timeframesConfig" 
+                        :key="tf.value"
+                        :class="['tf-btn', timeframe === tf.value ? 'active' : '']"
+                        @click="timeframe = tf.value"
+                      >
+                        {{ tf.label }}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="menu-section">
+                    <div class="menu-label">Settings</div>
+                    <div class="settings-list">
+                      <label class="setting-row">
+                        <span>Enable Timer</span>
+                        <div class="toggle" :class="{ active: settings.timer }" @click="settings.timer = !settings.timer">
+                          <div class="toggle-handle"></div>
+                        </div>
+                      </label>
+                      <label class="setting-row">
+                        <span>Enable Auto Scroll</span>
+                        <div class="toggle" :class="{ active: settings.autoScroll }" @click="settings.autoScroll = !settings.autoScroll">
+                          <div class="toggle-handle"></div>
+                        </div>
+                      </label>
+                      <label class="setting-row">
+                        <span>Enable Grid Snap</span>
+                        <div class="toggle" :class="{ active: settings.gridSnap }" @click="settings.gridSnap = !settings.gridSnap">
+                          <div class="toggle-handle"></div>
+                        </div>
+                      </label>
+                    </div>
+                    <div class="custom-color-link">Custom Candle Color</div>
+                  </div>
+                </div>
               </div>
-              <div class="chip-group">
-                <button
-                  v-for="type in ['line', 'area', 'candle']"
-                  :key="type"
-                  :class="['chip', chartType === type ? 'active' : '']"
-                  @click="chartType = type"
-                  :title="type"
-                >
-                  <LineChart v-if="type === 'line'" :size="16" />
-                  <Activity v-if="type === 'area'" :size="16" />
-                  <BarChart2 v-if="type === 'candle'" :size="16" />
+
+              <!-- Indicators Menu -->
+              <div class="tool-wrapper">
+                <button class="tool-btn" :class="{ active: activeMenu === 'indicators' }" @click="toggleMenu('indicators')">
+                  <Sliders :size="18" />
+                </button>
+                <div v-if="activeMenu === 'indicators'" class="tool-dropdown indicators-menu">
+                  <div class="indicators-grid">
+                    <div 
+                      v-for="ind in indicatorsList" 
+                      :key="ind" 
+                      class="indicator-item"
+                      @click="
+                        ind === 'Moving Average' ? (showSMA = !showSMA) : 
+                        ind === 'Exponential Moving Average' ? (showEMA = !showEMA) : null
+                      "
+                    >
+                      <div class="star-icon">☆</div>
+                      <span>{{ ind }}</span>
+                      <div v-if="(ind === 'Moving Average' && showSMA) || (ind === 'Exponential Moving Average' && showEMA)" class="active-dot"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Drawing Menu -->
+              <div class="tool-wrapper">
+                <button class="tool-btn" :class="{ active: activeMenu === 'drawing' }" @click="toggleMenu('drawing')">
+                  <PenTool :size="18" />
+                </button>
+                <div v-if="activeMenu === 'drawing'" class="tool-dropdown drawing-menu">
+                  <div 
+                    v-for="tool in drawingTools" 
+                    :key="tool.id" 
+                    class="drawing-item"
+                    @click="startDrawing(tool.id)"
+                  >
+                    <component :is="tool.icon" :size="16" />
+                    <span>{{ tool.label }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- More & Grid -->
+              <div class="tool-wrapper">
+                <button class="tool-btn">
+                  <MoreHorizontal :size="18" />
                 </button>
               </div>
-              <div class="chip-group">
-                <button
-                  v-for="tf in timeframeOptions"
-                  :key="tf"
-                  :class="['chip', timeframe === tf ? 'active' : '']"
-                  @click="timeframe = tf"
-                >
-                  {{ timeframeLabel(tf) }}
+              <div class="tool-wrapper">
+                <button class="tool-btn">
+                  <Grid :size="18" />
                 </button>
-              </div>
-              <div class="indicator-toggle">
-                <label><input type="checkbox" v-model="showSMA" /> SMA</label>
-                <label><input type="checkbox" v-model="showEMA" /> EMA</label>
-                <input type="number" v-model.number="smaPeriod" min="2" class="period-input" />
               </div>
             </div>
           </div>
@@ -286,7 +353,9 @@ import { createChart, LineSeries, AreaSeries, CandlestickSeries } from 'lightwei
 import { 
   Wallet, Activity, Zap, TrendingUp, TrendingDown, Clock, DollarSign, 
   ArrowUpRight, ArrowDownRight, History, Layers, Settings, Plus, Eraser, 
-  RefreshCw, ChevronDown, BarChart2, LineChart, PieChart, ToggleLeft, ToggleRight
+  RefreshCw, ChevronDown, BarChart2, LineChart, PieChart, ToggleLeft, ToggleRight,
+  MoreHorizontal, PenTool, Grid, Sliders, X,
+  Minus, MoreVertical, Menu, Fan, Maximize, Square, Move, GitBranch
 } from 'lucide-vue-next';
 import { useMarketStore } from '../stores/market';
 import api from '../api/axios';
@@ -309,7 +378,47 @@ const timeframe = ref(5); // seconds per bar
 const showSMA = ref(false);
 const showEMA = ref(false);
 const smaPeriod = ref(10);
-const timeframeOptions = [1, 5, 15, 30, 60, 300, 600];
+const timeframeOptions = [1, 5, 15, 30, 60, 300, 600]; // Keep for logic mapping
+
+// UI State for Menus
+const activeMenu = ref(null); // 'chart', 'indicators', 'drawing', 'more'
+const toggleMenu = (menu) => {
+  activeMenu.value = activeMenu.value === menu ? null : menu;
+};
+
+// Configuration Lists
+const timeframesConfig = [
+  { label: 'S5', value: 5 }, { label: 'S10', value: 10 }, { label: 'S15', value: 15 }, { label: 'S30', value: 30 },
+  { label: 'M1', value: 60 }, { label: 'M2', value: 120 }, { label: 'M3', value: 180 }, { label: 'M5', value: 300 },
+  { label: 'M10', value: 600 }, { label: 'M15', value: 900 }, { label: 'M30', value: 1800 }, { label: 'H1', value: 3600 },
+  { label: 'H4', value: 14400 }, { label: 'D1', value: 86400 }
+];
+
+const indicatorsList = [
+  'Accelerator Oscillator', 'ADX', 'Aroon', 'ATR', 'Bear Power', 'Bollinger Bands', 
+  'Bull Power', 'CCI', 'DeMarker', 'Envelopes', 'Exponential Moving Average', 'Fractal Chaos Bands', 'Ichimoku Kinko Hyo',
+  'MACD', 'Momentum', 'Moving Average', 'OsMA', 'Parabolic SAR', 'RSI', 'Stochastic',
+  'SuperTrend', 'Vortex', 'Williams %R', 'Zig Zag'
+];
+
+const drawingTools = [
+  { id: 'horizontal', label: 'Horizontal Line', icon: Minus },
+  { id: 'vertical', label: 'Vertical Line', icon: MoreVertical },
+  { id: 'ray', label: 'Ray', icon: ArrowUpRight },
+  { id: 'fib_retrace', label: 'Fibonacci Retracement', icon: Menu },
+  { id: 'fib_fan', label: 'Fibonacci Fan', icon: Fan },
+  { id: 'trend', label: 'Trend Line', icon: TrendingUp },
+  { id: 'channel', label: 'Parallel Channel', icon: Maximize },
+  { id: 'rect', label: 'Rectangle', icon: Square },
+  { id: 'pitchfork', label: "Andrew's Pitchfork", icon: GitBranch },
+];
+
+// Settings State
+const settings = ref({
+  timer: true,
+  autoScroll: true,
+  gridSnap: true
+});
 
 let currentBar = null; // { time, open, high, low, close }
 
@@ -416,6 +525,9 @@ const canTrade = computed(() => {
 const payoutRate = 0.85;
 
 const timeframeLabel = (sec) => {
+  const tf = timeframesConfig.find(t => t.value === sec);
+  if (tf) return tf.label;
+  
   if (sec < 60) return `S${sec}`;
   const minutes = sec / 60;
   return `M${minutes}`;
@@ -938,8 +1050,10 @@ const handleDeposit = async () => {
   }
 };
 
-const startDrawing = () => {
+const startDrawing = (toolId = 'trend') => {
   drawingMode = true;
+  // In a real implementation, we would set the specific tool type here
+  console.log('Starting drawing with tool:', toolId);
 };
 
 const clearDrawings = () => {
@@ -1127,6 +1241,10 @@ const handleWithdraw = async () => {
   gap: 16px;
   align-items: center;
   margin-bottom: 16px;
+  background: rgba(12, 16, 27, 0.4);
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .symbol-block {
@@ -1809,43 +1927,214 @@ const handleWithdraw = async () => {
   color: #5df7c2;
 }
 
-@media (max-width: 1100px) {
-  .workspace {
-    grid-template-columns: 1fr;
-  }
-  .chart-surface {
-    height: 420px;
-  }
-  .hero {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-  .hero-right {
-    width: 100%;
-  }
+/* Chart Menu Styles */
+.chart-menu {
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-@media (max-width: 720px) {
-  .page-shell {
-    padding: 12px;
-  }
-  .chart-toolbar {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .toolbar-right {
-    width: 100%;
-    justify-content: flex-start;
-  }
-  .chip-group {
-    flex-wrap: wrap;
-  }
-  .chart-surface {
-    height: 360px;
-  }
-  .funds-body .input-row {
-    grid-template-columns: 1fr;
-  }
+.menu-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.menu-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.type-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.type-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 12px 4px;
+  border-radius: 8px;
+  color: #8fa1c4;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.type-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.type-btn.active {
+  background: rgba(93, 247, 194, 0.1);
+  border-color: rgba(93, 247, 194, 0.3);
+  color: #5df7c2;
+}
+
+.type-btn span {
+  font-size: 10px;
+  text-align: center;
+}
+
+.tf-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.tf-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 6px 0;
+  color: #8fa1c4;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tf-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.tf-btn.active {
+  background: #5df7c2;
+  color: #0b0e14;
+  font-weight: 700;
+}
+
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: #d1d4dc;
+  cursor: pointer;
+}
+
+.toggle {
+  width: 36px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.toggle.active {
+  background: #5df7c2;
+}
+
+.toggle-handle {
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: all 0.2s;
+}
+
+.toggle.active .toggle-handle {
+  transform: translateX(16px);
+}
+
+.custom-color-link {
+  font-size: 12px;
+  color: #8fa1c4;
+  text-decoration: underline;
+  text-align: right;
+  cursor: pointer;
+  margin-top: 4px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  padding-top: 8px;
+}
+
+/* Indicators Menu */
+.indicators-menu {
+  width: 600px;
+  max-height: 400px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.indicators-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+}
+
+.indicator-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #d1d4dc;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.indicator-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.star-icon {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.indicator-item:hover .star-icon {
+  color: #ffd257;
+}
+
+.active-dot {
+  width: 6px;
+  height: 6px;
+  background: #5df7c2;
+  border-radius: 50%;
+  margin-left: auto;
+}
+
+/* Drawing Menu */
+.drawing-menu {
+  width: 240px;
+  padding: 8px;
+}
+
+.drawing-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #d1d4dc;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.drawing-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
 }
 </style>
