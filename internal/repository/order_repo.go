@@ -41,7 +41,7 @@ func (r *OrderRepository) CountOpenOrders(userID int64) (int64, error) {
 	return count, err
 }
 
-func (r *OrderRepository) GetOrdersByUserID(userID int64, limit int, status string) ([]model.Order, error) {
+func (r *OrderRepository) GetOrdersByUserID(userID int64, limit, offset int, status string) ([]model.Order, error) {
 	var orders []model.Order
 	tx := core.DB.Where("user_id = ?", userID)
 	if status != "" {
@@ -49,6 +49,9 @@ func (r *OrderRepository) GetOrdersByUserID(userID int64, limit int, status stri
 	}
 	if limit > 0 {
 		tx = tx.Limit(limit)
+	}
+	if offset > 0 {
+		tx = tx.Offset(offset)
 	}
 	err := tx.Order("created_at desc").Find(&orders).Error
 	return orders, err
@@ -61,4 +64,15 @@ func (r *OrderRepository) SumPnLSince(userID int64, from time.Time) (float64, er
 		Where("user_id = ? AND close_time >= ? AND status IN ?", userID, from, []string{"won", "lost", "draw"}).
 		Scan(&total).Error
 	return total, err
+}
+
+// GetDueOrders returns active orders whose close_time has passed.
+func (r *OrderRepository) GetDueOrders(limit int) ([]model.Order, error) {
+	var orders []model.Order
+	tx := core.DB.Where("status = ? AND close_time <= ?", "active", time.Now())
+	if limit > 0 {
+		tx = tx.Limit(limit)
+	}
+	err := tx.Order("close_time asc").Find(&orders).Error
+	return orders, err
 }

@@ -13,9 +13,9 @@ type TradeHandler struct {
 	tradeService *service.TradeService
 }
 
-func NewTradeHandler() *TradeHandler {
+func NewTradeHandler(tradeService *service.TradeService) *TradeHandler {
 	return &TradeHandler{
-		tradeService: service.NewTradeService(),
+		tradeService: tradeService,
 	}
 }
 
@@ -106,7 +106,14 @@ func (h *TradeHandler) GetOrderHistory(c *gin.Context) {
 		}
 	}
 
-	orders, err := h.tradeService.GetOrderHistory(userID, status, limit)
+	offset := 0
+	if o := c.Query("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil {
+			offset = parsed
+		}
+	}
+
+	orders, err := h.tradeService.GetOrderHistory(userID, status, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

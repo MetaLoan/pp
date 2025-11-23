@@ -28,6 +28,9 @@ func InitDB() {
 	if err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
+	if err := DB.AutoMigrate(&model.WalletLedger{}, &model.SettlementLog{}); err != nil {
+		log.Fatalf("Failed to migrate ledger tables: %v", err)
+	}
 
 	log.Println("Database connected and migrated successfully")
 }

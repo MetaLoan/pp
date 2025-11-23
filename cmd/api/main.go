@@ -5,6 +5,8 @@ import (
 	"github.com/MetaLoan/pp/internal/config"
 	"github.com/MetaLoan/pp/internal/core"
 	"github.com/MetaLoan/pp/internal/handler"
+	"github.com/MetaLoan/pp/internal/service"
+	"github.com/MetaLoan/pp/internal/worker"
 	"github.com/gin-gonic/gin"
 	"log"
 )
@@ -24,13 +26,17 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.Default()
-
+	
 	// Add CORS Middleware
 	r.Use(handler.CORSMiddleware())
 
 	// 3. Setup Routes
 	authHandler := handler.NewAuthHandler()
-	tradeHandler := handler.NewTradeHandler() // Add this
+	tradeService := service.NewTradeService()
+	tradeHandler := handler.NewTradeHandler(tradeService)
+	fundsHandler := handler.NewFundsHandler(service.NewFundsService())
+	marketHandler := handler.NewMarketHandler()
+	worker.StartSettlementWorker(tradeService)
 
 	api := r.Group("/api/v1")
 	{
@@ -48,7 +54,18 @@ func main() {
 			protected.GET("/trade/orders/active", tradeHandler.GetActiveOrders) // Add this
 			protected.GET("/trade/orders/history", tradeHandler.GetOrderHistory)
 			protected.GET("/wallet/balance", tradeHandler.GetBalance)
+			protected.POST("/funds/deposit", fundsHandler.Deposit)
+			protected.POST("/funds/withdraw", fundsHandler.Withdraw)
 		}
+
+		admin := api.Group("/admin")
+		admin.Use(handler.AuthMiddleware(), handler.AdminOnly())
+		{
+			admin.POST("/funds/review/:id", fundsHandler.Review)
+		}
+
+		// Public market data
+		api.GET("/market/candles", marketHandler.GetCandles)
 	}
 
 	// WebSocket Route
@@ -57,6 +74,13 @@ func main() {
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"message": "pong",
+			"version": "1.0.0",
+		})
+	})
+
+	r.GET("/healthz", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status":  "ok",
 			"version": "1.0.0",
 		})
 	})

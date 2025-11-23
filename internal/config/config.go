@@ -1,8 +1,11 @@
 package config
 
 import (
-	"github.com/spf13/viper"
 	"log"
+	"os"
+	"strings"
+
+	"github.com/spf13/viper"
 )
 
 type Config struct {
@@ -12,6 +15,9 @@ type Config struct {
 	Log      LogConfig
 	JWT      JWTConfig
 	Trading  TradingConfig
+	Market   MarketConfig
+	Settlement SettlementConfig
+	Funds    FundsConfig
 }
 
 type ServerConfig struct {
@@ -52,12 +58,62 @@ type TradingConfig struct {
 	DailyLossLimit float64
 }
 
+type MarketConfig struct {
+	External struct {
+		Provider string
+		BaseURL string
+		Path    string
+		Timeout string
+		APIKey  string
+	}
+	Breaker struct {
+		FailThreshold int
+		OpenSeconds   int
+	}
+	MockInitial      map[string]float64
+	PollInterval     string
+	MaxBehindSeconds int
+	SymbolMap        map[string]string
+}
+
+type SettlementConfig struct {
+	Interval   string
+	BatchSize  int
+	LockKey    int64
+}
+
+type FundsConfig struct {
+	Deposit struct {
+		MinAmount float64
+		MaxAmount float64
+		DailyMax  float64
+		Cooldown  string
+	}
+	Withdraw struct {
+		MinAmount float64
+		MaxAmount float64
+		DailyMax  float64
+		Cooldown  string
+		FeeRate   float64
+		MinFee    float64
+	}
+}
+
 var GlobalConfig Config
 
 func LoadConfig() {
-	viper.SetConfigName("config")
+	configName := os.Getenv("CONFIG_FILE")
+	if configName == "" {
+		configName = "config"
+	}
+
+	viper.SetConfigName(configName)
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(".")
+
+	// Allow environment overrides like SERVER_PORT, DATABASE_HOST, JWT_SECRET, TRADING_MAXOPENORDERS
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	if err := viper.ReadInConfig(); err != nil {
 		log.Fatalf("Error reading config file, %s", err)

@@ -1,9 +1,9 @@
 server:
   port: 8080
-  mode: debug # debug, release
+  mode: debug
 
 database:
-  host: "localhost"
+  host: "postgres"
   port: 5432
   user: "postgres"
   password: "password"
@@ -11,7 +11,7 @@ database:
   sslmode: "disable"
 
 redis:
-  addr: "localhost:6379"
+  addr: "redis:6379"
   password: ""
   db: 0
 
@@ -24,19 +24,19 @@ jwt:
   expire: 24h
 
 trading:
-  allowedSymbols: ["EURUSD", "BTCUSDT", "ETHUSDT", "S1"]
+  allowedSymbols: ["EURUSD", "BTCUSDT", "ETHUSDT"]
   minOrderAmount: 1
   maxOrderAmount: 10000
   maxOpenOrders: 10
-  dailyLossLimit: 5000  # absolute loss cap per day; 0 to disable
+  dailyLossLimit: 5000
 
 market:
   external:
-    provider: "mock"   # binance | http | twelvedata | empty (mock only)
-    baseURL: ""              # default twelvedata https://api.twelvedata.com if empty
-    path: ""                 # twelvedata default /price; custom http mode: /price?symbol=XXX
+    provider: "binance"
+    baseURL: ""
+    path: ""
     timeout: 3s
-    apiKey: ""               # leave empty; set env MARKET_EXTERNAL_APIKEY or TWELVEDATA_API_KEY for TwelveData
+    apiKey: ""
   breaker:
     failThreshold: 3
     openSeconds: 10
@@ -44,9 +44,8 @@ market:
     EURUSD: 1.05
     BTCUSDT: 65000
     ETHUSDT: 3200
-    S1: 100
-  pollInterval: "100ms"     # Fast polling for S1 simulation
-  maxBehindSeconds: 5      # maximum staleness allowed for price timestamp caching
+  pollInterval: "1s"
+  maxBehindSeconds: 5
   symbolMap:
     EURUSD: "EUR/USD"
     GBPUSD: "GBP/USD"
@@ -57,7 +56,7 @@ market:
 settlement:
   interval: "1s"
   batchSize: 200
-  lockKey: 4242   # advisory lock key to avoid concurrent workers
+  lockKey: 4242
 
 funds:
   deposit:
@@ -70,5 +69,5 @@ funds:
     maxAmount: 50000
     dailyMax: 100000
     cooldown: "30s"
-    feeRate: 0.005    # 0.5% fee
-    minFee: 1         # minimum fee
+    feeRate: 0.005
+    minFee: 1

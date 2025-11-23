@@ -1,0 +1,64 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: pp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: pp_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: pp-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api.prod
+    container_name: pp-api
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - CONFIG_FILE=config.docker
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.web.prod
+      args:
+        API_BASE: https://localhost/api/v1
+    container_name: pp-web
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "443:443"
+      - "5173:80" # optional plain http access
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
+      - ./web/nginx.tls.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  pgdata:
+  redisdata:

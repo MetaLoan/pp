@@ -1,0 +1,15 @@
+FROM golang:1.25 AS builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /app/api ./cmd/api
+
+FROM gcr.io/distroless/static:nonroot
+WORKDIR /app
+COPY --from=builder /app/api /app/api
+COPY --from=builder /app/config.docker.yaml /app/config.docker.yaml
+ENV CONFIG_FILE=config.docker
+EXPOSE 8080
+USER nonroot
+ENTRYPOINT ["/app/api"]

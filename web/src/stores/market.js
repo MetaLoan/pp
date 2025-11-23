@@ -3,7 +3,7 @@ import api from '../api/axios';
 
 export const useMarketStore = defineStore('market', {
   state: () => ({
-    allowedSymbols: ['EURUSD', 'BTCUSDT', 'ETHUSDT'],
+    allowedSymbols: ['EURUSD', 'BTCUSDT', 'ETHUSDT', 'S1'],
     selectedSymbol: 'EURUSD',
     currentPrice: 0,
     priceHistory: [], // Array of { time, value } for chart
@@ -11,8 +11,11 @@ export const useMarketStore = defineStore('market', {
     socket: null,
     activeOrders: [],
     orderHistory: [],
+    historyHasMore: true,
     balance: 0,
     balanceCurrency: 'USDT',
+    candles: [],
+    timeframeSec: 5,
   }),
   actions: {
     connect() {
@@ -29,6 +32,9 @@ export const useMarketStore = defineStore('market', {
       this.socket.onopen = () => {
         console.log('WebSocket connected', wsUrl);
         this.isConnected = true;
+        // Clear old ticks so we don't show stale prices after a reconnect/restart.
+        this.priceHistory = [];
+        this.currentPrice = 0;
       };
 
       this.socket.onmessage = (event) => {
@@ -79,7 +85,12 @@ export const useMarketStore = defineStore('market', {
         console.log('WebSocket disconnected', wsUrl);
         this.isConnected = false;
         this.socket = null;
-        // Reconnect logic could go here
+        
+        // Auto-reconnect after 3 seconds
+        setTimeout(() => {
+          console.log('Attempting to reconnect...');
+          this.connect();
+        }, 3000);
       };
     },
     disconnect() {
@@ -93,7 +104,13 @@ export const useMarketStore = defineStore('market', {
         this.selectedSymbol = symbol;
         this.currentPrice = 0;
         this.priceHistory = [];
+        this.orderHistory = [];
+        this.historyHasMore = true;
+        this.candles = [];
       }
+    },
+    setTimeframe(sec) {
+      if (sec > 0) this.timeframeSec = sec;
     },
     async placeOrder(symbol, direction, amount, duration) {
       try {
@@ -118,10 +135,16 @@ export const useMarketStore = defineStore('market', {
         console.error('Failed to fetch orders:', error);
       }
     },
-    async fetchOrderHistory({ status = '', limit = 20 } = {}) {
+    async fetchOrderHistory({ status = '', limit = 20, offset = 0, append = false } = {}) {
       try {
-        const response = await api.get('/trade/orders/history', { params: { status, limit } });
-        this.orderHistory = response.data.orders;
+        const response = await api.get('/trade/orders/history', { params: { status, limit, offset } });
+        const data = response.data.orders || [];
+        this.historyHasMore = data.length === limit;
+        if (append && offset > 0) {
+          this.orderHistory = [...this.orderHistory, ...data];
+        } else {
+          this.orderHistory = data;
+        }
       } catch (error) {
         console.error('Failed to fetch order history:', error);
       }
@@ -133,6 +156,20 @@ export const useMarketStore = defineStore('market', {
         this.balanceCurrency = response.data.currency;
       } catch (error) {
         console.error('Failed to fetch balance:', error);
+      }
+    },
+    async fetchCandles({ symbol, interval = 5, limit = 200 } = {}) {
+      try {
+        const response = await api.get('/market/candles', {
+          params: {
+            symbol: symbol || this.selectedSymbol,
+            interval,
+            limit,
+          },
+        });
+        this.candles = response.data.candles || [];
+      } catch (error) {
+        console.error('Failed to fetch candles:', error);
       }
     }
   },

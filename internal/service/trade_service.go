@@ -13,14 +13,16 @@ import (
 )
 
 type TradeService struct {
-	orderRepo  *repository.OrderRepository
-	walletRepo *repository.WalletRepository
+	orderRepo        *repository.OrderRepository
+	walletRepo       *repository.WalletRepository
+	settlementLogger *repository.SettlementLogRepository
 }
 
 func NewTradeService() *TradeService {
 	return &TradeService{
-		orderRepo:  repository.NewOrderRepository(),
-		walletRepo: repository.NewWalletRepository(),
+		orderRepo:        repository.NewOrderRepository(),
+		walletRepo:       repository.NewWalletRepository(),
+		settlementLogger: repository.NewSettlementLogRepository(),
 	}
 }
 
@@ -78,12 +80,6 @@ func (s *TradeService) PlaceOrder(userID int64, symbol, direction string, amount
 		return nil, err
 	}
 
-	// 4. Schedule Settlement (Simplified: using goroutine)
-	go func() {
-		time.Sleep(time.Duration(durationSeconds) * time.Second)
-		s.SettleOrder(order.ID)
-	}()
-
 	return order, nil
 }
 
@@ -137,13 +133,32 @@ func (s *TradeService) SettleOrder(orderID int64) error {
 	// Wait, my UnfreezeAndSettle logic was: balance = balance + profitAmount.
 	// So if won: profitAmount = principal + profit.
 	// If lost: profitAmount = 0.
-	if err := s.walletRepo.UnfreezeAndSettle(order.UserID, "USDT", order.Amount, settlementAmount); err != nil {
+	if err := s.walletRepo.UnfreezeAndSettle(order.UserID, "USDT", order.Amount, settlementAmount, order.OrderNo); err != nil {
 		// Log critical error: money stuck in frozen
 		return err
 	}
 
 	// Update Order
-	return s.orderRepo.UpdateOrder(order)
+	if err := s.orderRepo.UpdateOrder(order); err != nil {
+		return err
+	}
+
+	// Persist settlement log
+	logEntry := &model.SettlementLog{
+		OrderID:     order.ID,
+		OrderNo:     order.OrderNo,
+		UserID:      order.UserID,
+		AssetSymbol: order.AssetSymbol,
+		Direction:   order.Direction,
+		Amount:      order.Amount,
+		PayoutRate:  order.PayoutRate,
+		OpenPrice:   order.OpenPrice,
+		ClosePrice:  order.ClosePrice,
+		Result:      order.Status,
+		PnL:         order.PnL,
+		SettledAt:   time.Now(),
+	}
+	return s.settlementLogger.Create(logEntry)
 }
 
 func (s *TradeService) GetActiveOrders(userID int64) ([]model.Order, error) {
@@ -154,11 +169,26 @@ func (s *TradeService) GetWallet(userID int64, currency string) (*model.Wallet, 
 	return s.walletRepo.GetWallet(userID, currency)
 }
 
-func (s *TradeService) GetOrderHistory(userID int64, status string, limit int) ([]model.Order, error) {
+func (s *TradeService) GetOrderHistory(userID int64, status string, limit, offset int) ([]model.Order, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	return s.orderRepo.GetOrdersByUserID(userID, limit, status)
+	if offset < 0 {
+		offset = 0
+	}
+	return s.orderRepo.GetOrdersByUserID(userID, limit, offset, status)
+}
+
+// ProcessDueOrders settles active orders whose close_time has passed.
+func (s *TradeService) ProcessDueOrders(limit int) error {
+	orders, err := s.orderRepo.GetDueOrders(limit)
+	if err != nil {
+		return err
+	}
+	for _, o := range orders {
+		_ = s.SettleOrder(o.ID)
+	}
+	return nil
 }
 
 func (s *TradeService) validateSymbol(symbol string) error {
