@@ -1942,7 +1942,7 @@ const handleSignalTrade = async (signal) => {
       return;
     }
     
-    // 计算剩余有效期
+    // 计算剩余有效期（毫秒转秒）
     const remainingTime = signal.expiryTime - now;
     const remainingSeconds = Math.ceil(remainingTime / 1000);
     
@@ -1952,26 +1952,23 @@ const handleSignalTrade = async (signal) => {
       return;
     }
     
-    // 检查 duration 是否最少 5 秒
-    if (signal.duration < 5) {
-      errorMsg.value = `⚠ 订单时长过短（${signal.duration}s），最少需要5秒`;
-      return;
-    }
+    // 使用剩余时间作为订单时长，而不是signal.duration
+    const orderDuration = remainingSeconds;
     
     // 更新交易参数
     amount.value = signal.amount;
-    duration.value = signal.duration;
+    duration.value = orderDuration; // 设置为剩余时间
     selectedSymbol.value = signal.symbol;
     
-    // 执行下单
-    await marketStore.placeOrder(signal.symbol, signal.action, signal.amount, signal.duration);
+    // 执行下单（使用计算出的orderDuration）
+    await marketStore.placeOrder(signal.symbol, signal.action, signal.amount, orderDuration);
     
     // 刷新数据
     marketStore.fetchActiveOrders();
     marketStore.fetchBalance();
     
     // 显示成功反馈并切换到订单面板
-    errorMsg.value = `✓ 信号交易执行: ${signal.action} ${signal.title}`;
+    errorMsg.value = `✓ 信号交易执行: ${signal.action} ${signal.title} (${orderDuration}s)`;
     activeRightModule.value = 'orders';
     
     // 3秒后清除提示
