@@ -1686,6 +1686,23 @@ const handleOutsideClick = (e) => {
   width: 320px;
 }
 
+.action-group-compact .input-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #8fa1c4;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.action-group-compact .label-icon {
+  color: #5df7c2;
+  opacity: 0.8;
+}
+
 .action-buttons {
   display: flex;
   gap: 10px;
