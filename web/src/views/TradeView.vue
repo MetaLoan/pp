@@ -514,7 +514,7 @@
               <span class="badge accent">实时脉冲</span>
             </div>
             <div class="signal-list">
-              <div v-for="sig in signalFeed" :key="sig.title" class="signal-row" @click="handleSignalTrade(sig)">
+              <div v-for="sig in signalFeed" :key="sig.title" class="signal-row" @click="handleSignalTrade(sig)" @contextmenu.prevent="showSignalDetail = true; selectedSignal = sig">
                 <div class="signal-meta">
                   <div class="signal-title">{{ sig.title }}</div>
                   <div class="signal-sub">{{ sig.metric }}</div>
@@ -528,6 +528,9 @@
                 <div class="signal-actions">
                   <button :class="['pill', 'signal-btn', sig.action === 'CALL' ? 'pill-green' : 'pill-red']" @click.stop="handleSignalTrade(sig)">
                     {{ sig.action }}
+                  </button>
+                  <button class="pill pill-soft signal-detail-btn" @click.stop="showSignalDetail = true; selectedSignal = sig" title="查看详情">
+                    ℹ
                   </button>
                   <span class="pill pill-soft">{{ sig.timing }}</span>
                 </div>
@@ -621,6 +624,91 @@
           </div>
         </div>
 
+        <!-- Signal Detail Modal -->
+        <div v-if="showSignalDetail && selectedSignal" class="modal-overlay" @click="showSignalDetail = false">
+          <div class="modal-card signal-detail-modal" @click.stop>
+            <div class="modal-header">
+              <h3>
+                <Antenna :size="20" /> {{ selectedSignal.title }}
+              </h3>
+              <button class="modal-close" @click="showSignalDetail = false">
+                <X :size="20" />
+              </button>
+            </div>
+            <div class="modal-body">
+              <div class="detail-grid">
+                <!-- 交易方向 -->
+                <div class="detail-item">
+                  <span class="detail-label">交易方向</span>
+                  <span :class="['detail-badge', selectedSignal.action === 'CALL' ? 'badge-call' : 'badge-put']">
+                    {{ selectedSignal.action }}
+                  </span>
+                </div>
+                
+                <!-- 技术指标 -->
+                <div class="detail-item">
+                  <span class="detail-label">技术指标</span>
+                  <span class="detail-value">{{ selectedSignal.metric }}</span>
+                </div>
+                
+                <!-- 信心度 -->
+                <div class="detail-item full-width">
+                  <span class="detail-label">信心度评分</span>
+                  <div class="confidence-display">
+                    <div class="confidence-bar-large">
+                      <span class="confidence-fill" :style="{ width: Math.round(selectedSignal.confidence * 100) + '%' }"></span>
+                    </div>
+                    <span class="confidence-percent">{{ Math.round(selectedSignal.confidence * 100) }}%</span>
+                  </div>
+                </div>
+                
+                <!-- 交易参数 -->
+                <div class="detail-item">
+                  <span class="detail-label">推荐金额</span>
+                  <span class="detail-value">{{ selectedSignal.amount }} USDT</span>
+                </div>
+                
+                <div class="detail-item">
+                  <span class="detail-label">推荐时长</span>
+                  <span class="detail-value">{{ selectedSignal.duration }}s</span>
+                </div>
+                
+                <!-- 时间框架 -->
+                <div class="detail-item">
+                  <span class="detail-label">时间框架</span>
+                  <span class="detail-value">{{ selectedSignal.timing }}</span>
+                </div>
+
+                <!-- 分析详情 -->
+                <div class="detail-item full-width">
+                  <span class="detail-label">分析详情</span>
+                  <div class="analysis-content">
+                    <div class="analysis-point">
+                      <span class="point-label">入场点位</span>
+                      <span class="point-value">当前价格 ± 0.5%</span>
+                    </div>
+                    <div class="analysis-point">
+                      <span class="point-label">止损位</span>
+                      <span class="point-value">-2.0% 风险控制</span>
+                    </div>
+                    <div class="analysis-point">
+                      <span class="point-label">目标位</span>
+                      <span class="point-value">+3.5% 预期收益</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn-secondary" @click="showSignalDetail = false">关闭</button>
+              <button :class="['btn-primary', selectedSignal.action === 'CALL' ? 'btn-call' : 'btn-put']" 
+                @click="handleSignalTrade(selectedSignal); showSignalDetail = false">
+                执行 {{ selectedSignal.action }} 交易
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Deposit Modal -->
         <div v-if="showDepositModal" class="modal-overlay" @click="showDepositModal = false">
           <div class="modal-card" @click.stop>
@@ -696,6 +784,8 @@ const withdrawAmount = ref(50);
 const fundsMsg = ref('');
 const fundsError = ref('');
 const showDepositModal = ref(false);
+const showSignalDetail = ref(false);
+const selectedSignal = ref(null);
 const chartType = ref('line'); // line | area | candle
 const timeframe = ref(5); // seconds per bar
 const showSMA = ref(false);
@@ -4137,5 +4227,161 @@ const handleSignalTrade = async (signal) => {
 .btn-secondary:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
+}
+
+/* Signal Detail Modal Styles */
+.signal-detail-modal {
+  max-width: 600px;
+}
+
+.signal-detail-btn {
+  background: none !important;
+  border: none !important;
+  color: #8fa1c4;
+  padding: 4px 8px !important;
+  font-size: 14px !important;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.signal-detail-btn:hover {
+  color: #5df7c2 !important;
+  background: rgba(93, 247, 194, 0.1) !important;
+  border-radius: 6px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detail-item.full-width {
+  grid-column: 1 / -1;
+}
+
+.detail-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #8fa1c4;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.detail-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.detail-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  width: fit-content;
+}
+
+.detail-badge.badge-call {
+  background: rgba(16, 185, 129, 0.2);
+  color: #5df7c2;
+  border: 1px solid rgba(93, 247, 194, 0.3);
+}
+
+.detail-badge.badge-put {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ff7b7b;
+  border: 1px solid rgba(255, 123, 123, 0.3);
+}
+
+.confidence-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.confidence-bar-large {
+  flex: 1;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.confidence-bar-large .confidence-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #3dffb5, #5df7c2);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.confidence-percent {
+  font-size: 14px;
+  font-weight: 700;
+  color: #5df7c2;
+  min-width: 40px;
+  text-align: right;
+}
+
+.analysis-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(93, 247, 194, 0.05);
+  border: 1px solid rgba(93, 247, 194, 0.1);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.analysis-point {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(93, 247, 194, 0.1);
+}
+
+.analysis-point:last-child {
+  border-bottom: none;
+}
+
+.point-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8fa1c4;
+}
+
+.point-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: #5df7c2;
+}
+
+.btn-call {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+}
+
+.btn-call:hover {
+  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3) !important;
+}
+
+.btn-put {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+}
+
+.btn-put:hover {
+  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3) !important;
 }
 </style>
