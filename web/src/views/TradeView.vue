@@ -266,12 +266,6 @@
         <!-- Trade Ticket - Floating Bottom Module -->
         <div class="trade-ticket-floating">
           <div class="ticket-content">
-            <!-- 预估收益角标 -->
-            <div class="return-badge">
-              <span class="return-label">Est. Return</span>
-              <span class="return-value">${{ (amount * (1 + payoutRate)).toFixed(2) }}</span>
-            </div>
-            
             <div v-if="errorMsg" class="alert">{{ errorMsg }}</div>
             
             <div class="dock-layout">
@@ -300,6 +294,18 @@
                       <option value="60">60s</option>
                       <option value="300">5m</option>
                     </select>
+                  </div>
+                </div>
+                
+                <div class="dock-divider"></div>
+                
+                <div class="input-group-compact">
+                  <div class="input-label">
+                    <TrendingUp :size="16" class="label-icon" />
+                    <span>Est. Return</span>
+                  </div>
+                  <div class="input-field input-field-readonly">
+                    <div class="return-display">${{ (amount * (1 + payoutRate)).toFixed(2) }}</div>
                   </div>
                 </div>
               </div>
@@ -1515,47 +1521,6 @@ const handleOutsideClick = (e) => {
   transform: translateY(-2px);
 }
 
-/* 预估收益角标 */
-.return-badge {
-  position: absolute;
-  top: -12px;
-  right: 20px;
-  background: linear-gradient(135deg, #5df7c2 0%, #3dffb5 100%);
-  padding: 6px 14px;
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  box-shadow: 0 4px 16px rgba(93, 247, 194, 0.4), 0 0 0 1px rgba(93, 247, 194, 0.2);
-  animation: badge-glow 2s ease-in-out infinite;
-}
-
-@keyframes badge-glow {
-  0%, 100% {
-    box-shadow: 0 4px 16px rgba(93, 247, 194, 0.4), 0 0 0 1px rgba(93, 247, 194, 0.2);
-  }
-  50% {
-    box-shadow: 0 6px 24px rgba(93, 247, 194, 0.6), 0 0 0 1px rgba(93, 247, 194, 0.4);
-  }
-}
-
-.return-badge .return-label {
-  font-size: 9px;
-  font-weight: 700;
-  color: rgba(10, 14, 20, 0.7);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  line-height: 1;
-}
-
-.return-badge .return-value {
-  font-size: 15px;
-  font-weight: 800;
-  color: #0a0e14;
-  line-height: 1;
-}
-
 .dock-layout {
   display: flex;
   align-items: center;
@@ -1625,6 +1590,27 @@ const handleOutsideClick = (e) => {
   padding: 2px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
+  min-width: 140px;
+}
+
+.input-group-compact .input-field-readonly {
+  background: rgba(93, 247, 194, 0.08);
+  border-color: rgba(93, 247, 194, 0.25);
+  cursor: default;
+}
+
+.input-group-compact .input-field-readonly:hover {
+  background: rgba(93, 247, 194, 0.1);
+  border-color: rgba(93, 247, 194, 0.3);
+}
+
+.input-group-compact .return-display {
+  flex: 1;
+  padding: 10px 12px;
+  color: #5df7c2;
+  font-size: 15px;
+  font-weight: 800;
+  text-align: center;
 }
 
 .input-group-compact .input-field:hover {
@@ -1647,7 +1633,7 @@ const handleOutsideClick = (e) => {
   color: #fff;
   font-size: 15px;
   font-weight: 700;
-  min-width: 80px;
+  min-width: 100px;
   box-sizing: border-box;
   outline: none;
 }
