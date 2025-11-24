@@ -1355,6 +1355,7 @@ const handleOutsideClick = (e) => {
     #0b0e14;
   color: #e7ecf5;
   padding: 24px;
+  padding-bottom: 140px;
   font-family: 'Inter', 'SF Pro Display', system-ui, -apple-system, sans-serif;
   display: flex;
   flex-direction: column;
