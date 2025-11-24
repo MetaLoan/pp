@@ -112,22 +112,6 @@
               </div>
             </div>
 
-            <!-- 快速货币切换器 -->
-            <div class="quick-symbols">
-              <button 
-                v-for="sym in tradingPairs.filter(p => p.favorited).slice(0, 6)" 
-                :key="sym.symbol"
-                :class="['quick-symbol-btn', { active: selectedSymbol === sym.symbol }]"
-                @click="selectedSymbol = sym.symbol"
-                :title="sym.display"
-              >
-                <span class="symbol-code">{{ sym.symbol.replace('USDT', '').replace('USD', '') }}</span>
-                <span :class="['arrow', 'arrow-' + (Math.random() > 0.5 ? 'up' : 'down')]">
-                  {{ Math.random() > 0.5 ? '↑' : '↓' }}
-                </span>
-              </button>
-            </div>
-
             <div class="toolbar-actions">
               <!-- Chart & Timeframe Menu -->
               <div class="tool-wrapper">
@@ -610,6 +594,32 @@
             </div>
           </div>
 
+          <!-- Market Overview (Currency List with Trend Arrows) -->
+          <div v-else-if="activeRightModule === 'market'" class="card market-card">
+            <div class="card-head">
+              <span><Activity :size="14" /> 货币行情</span>
+              <span class="badge">实时</span>
+            </div>
+            <div class="market-grid">
+              <button 
+                v-for="pair in tradingPairs.slice(0, 12)" 
+                :key="pair.symbol"
+                class="market-pair-item"
+                @click="selectedSymbol = pair.symbol; activeRightModule = 'orders'"
+              >
+                <div class="pair-symbol">{{ pair.display }}</div>
+                <div class="pair-trend">
+                  <span v-if="getRandomTrendStrength() >= 0.6" :class="['trend-arrow', getRandomTrendDirection() > 0 ? 'up' : 'down']">
+                    {{ getRandomTrendDirection() > 0 ? '↑↑' : '↓↓' }}
+                  </span>
+                  <span v-else :class="['trend-arrow', getRandomTrendDirection() > 0 ? 'up' : 'down']">
+                    {{ getRandomTrendDirection() > 0 ? '↑' : '↓' }}
+                  </span>
+                </div>
+              </button>
+            </div>
+          </div>
+
           <!-- Social Trading -->
           <div v-else-if="activeRightModule === 'social'" class="card social-card">
             <div class="card-head">
@@ -873,6 +883,7 @@ const activeRightModule = ref('orders');
 const rightDockItems = [
   { id: 'orders', label: 'Orders', icon: History },
   { id: 'signals', label: 'Signals', icon: Antenna },
+  { id: 'market', label: 'Market', icon: Activity },
   { id: 'social', label: 'Social', icon: Users },
   { id: 'quick', label: 'Quick Trade', icon: Target },
   { id: 'pending', label: 'Pending', icon: Hourglass },
@@ -1123,6 +1134,24 @@ const getSignalValidity = (signal) => {
   if (remaining <= 0) return { isValid: false, remaining: 0, percent: 0 };
   const percent = Math.max(0, (remaining / signal.validity) * 100);
   return { isValid: true, remaining, percent };
+};
+
+// 生成随机趋势强度（用于演示）
+const trendCache = new Map();
+const getRandomTrendStrength = (symbol = '') => {
+  // 缓存趋势强度避免闪烁
+  if (!trendCache.has(`strength-${symbol}`)) {
+    trendCache.set(`strength-${symbol}`, Math.random());
+  }
+  return trendCache.get(`strength-${symbol}`);
+};
+
+// 生成随机趋势方向（上升1 或下降-1）
+const getRandomTrendDirection = (symbol = '') => {
+  if (!trendCache.has(`direction-${symbol}`)) {
+    trendCache.set(`direction-${symbol}`, Math.random() > 0.5 ? 1 : -1);
+  }
+  return trendCache.get(`direction-${symbol}`);
 };
 
 // Market Stats Calculations
@@ -3327,6 +3356,73 @@ const pushNewSignal = () => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* Market Grid */
+.market-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.market-pair-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.market-pair-item:hover {
+  background: rgba(93, 247, 194, 0.1);
+  border-color: rgba(93, 247, 194, 0.3);
+  box-shadow: 0 4px 12px rgba(93, 247, 194, 0.15);
+  transform: translateY(-2px);
+}
+
+.pair-symbol {
+  font-size: 11px;
+  font-weight: 700;
+  color: #8fa1c4;
+  text-transform: uppercase;
+}
+
+.pair-trend {
+  font-size: 16px;
+  font-weight: 700;
+  transition: all 0.3s;
+}
+
+.trend-arrow {
+  display: inline-block;
+}
+
+.trend-arrow.up {
+  color: #5df7c2;
+}
+
+.trend-arrow.down {
+  color: #ff7b7b;
+}
+
+.market-pair-item:hover .trend-arrow {
+  transform: scale(1.1);
+}
+
+/* Market Card */
+.market-card .card-body {
+  padding: 12px;
 }
 
 .signal-row,
