@@ -24,35 +24,14 @@
           <div class="chart-toolbar">
             <div class="symbol-block">
               <div class="symbol-select-wrapper">
-                <select v-model="selectedSymbol">
-                  <option v-for="sym in marketStore.allowedSymbols" :key="sym" :value="sym">
-                    {{ symbolLabel(sym) }}
-                  </option>
-                </select>
-                <ChevronDown class="select-arrow" :size="16" />
+                <button class="symbol-btn" @click.stop="toggleMenu('symbol')">
+                  {{ symbolLabel(selectedSymbol) }}
+                  <ChevronDown :size="16" />
+                </button>
               </div>
-              <div class="price-group">
-                <div class="price-ticker" :class="{ up: isPriceUp, down: !isPriceUp }">
-                  {{ formattedPrice }}
-                  <component :is="isPriceUp ? TrendingUp : TrendingDown" :size="18" />
-                </div>
-                <div class="market-stats">
-                  <div class="stat-item" :class="marketStats.change >= 0 ? 'up' : 'down'">
-                    <span class="stat-label">24h Chg</span>
-                    <span class="stat-value">
-                      {{ marketStats.change >= 0 ? '+' : '' }}{{ formatWithPrecision(marketStats.change) }}
-                      ({{ marketStats.changePercent.toFixed(2) }}%)
-                    </span>
-                  </div>
-                  <div class="stat-item">
-                    <span class="stat-label">24h High</span>
-                    <span class="stat-value">{{ formatWithPrecision(marketStats.high) }}</span>
-                  </div>
-                  <div class="stat-item">
-                    <span class="stat-label">24h Low</span>
-                    <span class="stat-value">{{ formatWithPrecision(marketStats.low) }}</span>
-                  </div>
-                </div>
+              <div class="price-ticker" :class="{ up: isPriceUp, down: !isPriceUp }">
+                {{ formattedPrice }}
+                <component :is="isPriceUp ? TrendingUp : TrendingDown" :size="18" />
               </div>
             </div>
 
@@ -102,16 +81,81 @@
             </div>
             <div class="chart-surface" ref="chartContainer"></div>
             <div class="chart-overlay bottom">
-              <div class="legend">
-                <span class="legend-dot up"></span>Uptrend
-                <span class="legend-dot down"></span>Downtrend
+              <div class="market-stats">
+                <div class="stat-item" :class="marketStats.change >= 0 ? 'up' : 'down'">
+                  <span class="stat-label">24h Chg</span>
+                  <span class="stat-value">
+                    {{ marketStats.change >= 0 ? '+' : '' }}{{ formatWithPrecision(marketStats.change) }}
+                    ({{ marketStats.changePercent.toFixed(2) }}%)
+                  </span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">24h High</span>
+                  <span class="stat-value">{{ formatWithPrecision(marketStats.high) }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">24h Low</span>
+                  <span class="stat-value">{{ formatWithPrecision(marketStats.low) }}</span>
+                </div>
               </div>
             </div>
           </div>
 
           <!-- Unified Floating Side Panel -->
-          <div v-if="activeMenu" class="floating-side-panel" @click.stop>
+          <div v-if="activeMenu" class="floating-side-panel" :class="{ 'symbol-panel': activeMenu === 'symbol' }" @click.stop>
             <div class="panel-content">
+              <!-- Symbol Selector Content -->
+              <div v-if="activeMenu === 'symbol'" class="symbol-menu-content">
+                <!-- Search Box -->
+                <div class="symbol-search-box">
+                  <Search :size="16" class="search-icon" />
+                  <input 
+                    v-model="symbolSearchQuery" 
+                    type="text" 
+                    placeholder="搜索" 
+                    class="symbol-search-input"
+                  />
+                </div>
+
+                <!-- Category Tabs -->
+                <div class="symbol-categories">
+                  <button 
+                    v-for="cat in symbolCategories" 
+                    :key="cat.id"
+                    :class="['category-btn', activeSymbolCategory === cat.id ? 'active' : '']"
+                    @click="activeSymbolCategory = cat.id"
+                  >
+                    <component :is="cat.icon" :size="14" />
+                    <span>{{ cat.label }}</span>
+                  </button>
+                </div>
+
+                <!-- Symbols List -->
+                <div class="symbols-list">
+                  <button 
+                    v-for="sym in filteredSymbols" 
+                    :key="sym.symbol"
+                    :class="['symbol-item', selectedSymbol === sym.symbol ? 'active' : '']"
+                    @click="selectedSymbol = sym.symbol; activeMenu = null;"
+                  >
+                    <div class="symbol-item-left">
+                      <button 
+                        class="star-btn"
+                        :class="{ favorited: sym.favorited }"
+                        @click.stop="toggleFavorite(sym.symbol)"
+                      >
+                        <Star :size="14" :fill="sym.favorited ? '#ffbe3d' : 'none'" />
+                      </button>
+                      <div class="symbol-info">
+                        <span class="symbol-name">{{ sym.display }}</span>
+                        <span class="symbol-return">{{ sym.returnRate }}</span>
+                      </div>
+                    </div>
+                    <Check v-if="selectedSymbol === sym.symbol" :size="16" class="check-icon" />
+                  </button>
+                </div>
+              </div>
+
               <!-- Chart Settings Content -->
               <div v-if="activeMenu === 'chart'" class="chart-menu-content">
                 <div class="menu-section">
@@ -386,7 +430,7 @@ import {
   Wallet, Activity, Zap, TrendingUp, TrendingDown, Clock, DollarSign, 
   ArrowUpRight, ArrowDownRight, History, Layers, Settings, Plus, Eraser, 
   RefreshCw, ChevronDown, BarChart2, LineChart, PieChart, ToggleLeft, ToggleRight,
-  MoreHorizontal, PenTool, Grid, Sliders, X,
+  MoreHorizontal, PenTool, Grid, Sliders, X, Check, Star, Search,
   Minus, MoreVertical, Menu, Fan, Maximize, Square, Move, GitBranch
 } from 'lucide-vue-next';
 import { useMarketStore } from '../stores/market';
@@ -413,10 +457,103 @@ const smaPeriod = ref(10);
 const timeframeOptions = [1, 5, 15, 30, 60, 300, 600]; // Keep for logic mapping
 
 // UI State for Menus
-const activeMenu = ref(null); // 'chart', 'indicators', 'drawing', 'more'
+const activeMenu = ref(null); // 'chart', 'indicators', 'drawing', 'more', 'symbol'
 const toggleMenu = (menu) => {
   activeMenu.value = activeMenu.value === menu ? null : menu;
 };
+
+// Symbol Selection State
+const symbolSearchQuery = ref('');
+const activeSymbolCategory = ref('favorites');
+
+// Trading Pairs Data
+const tradingPairs = ref([
+  // Crypto
+  { symbol: 'BTCUSDT', display: 'BTC/USDT', category: 'crypto', returnRate: '+92%', favorited: true },
+  { symbol: 'ETHUSDT', display: 'ETH/USDT', category: 'crypto', returnRate: '+92%', favorited: true },
+  { symbol: 'BNBUSDT', display: 'BNB/USDT', category: 'crypto', returnRate: '+92%', favorited: false },
+  { symbol: 'XRPUSDT', display: 'XRP/USDT', category: 'crypto', returnRate: '+92%', favorited: false },
+  { symbol: 'ADAUSDT', display: 'ADA/USDT', category: 'crypto', returnRate: '+92%', favorited: false },
+  { symbol: 'SOLUSDT', display: 'SOL/USDT', category: 'crypto', returnRate: '+92%', favorited: false },
+  { symbol: 'DOGEUSDT', display: 'DOGE/USDT', category: 'crypto', returnRate: '+92%', favorited: false },
+  { symbol: 'DOTUSDT', display: 'DOT/USDT', category: 'crypto', returnRate: '+92%', favorited: false },
+  
+  // Forex
+  { symbol: 'EURUSD', display: 'EUR/USD', category: 'forex', returnRate: '+92%', favorited: true },
+  { symbol: 'GBPUSD', display: 'GBP/USD', category: 'forex', returnRate: '+92%', favorited: false },
+  { symbol: 'USDJPY', display: 'USD/JPY', category: 'forex', returnRate: '+92%', favorited: false },
+  { symbol: 'AUDUSD', display: 'AUD/USD', category: 'forex', returnRate: '+92%', favorited: false },
+  { symbol: 'USDCAD', display: 'USD/CAD', category: 'forex', returnRate: '+92%', favorited: false },
+  { symbol: 'NZDUSD', display: 'NZD/USD', category: 'forex', returnRate: '+92%', favorited: false },
+  { symbol: 'EURGBP', display: 'EUR/GBP', category: 'forex', returnRate: '+92%', favorited: false },
+  { symbol: 'EURJPY', display: 'EUR/JPY', category: 'forex', returnRate: '+92%', favorited: false },
+  { symbol: 'GBPJPY', display: 'GBP/JPY', category: 'forex', returnRate: '+92%', favorited: false },
+  { symbol: 'AUDJPY', display: 'AUD/JPY', category: 'forex', returnRate: '+92%', favorited: false },
+  
+  // Commodities
+  { symbol: 'XAUUSD', display: 'Gold', category: 'commodities', returnRate: '+92%', favorited: false },
+  { symbol: 'XAGUSD', display: 'Silver', category: 'commodities', returnRate: '+92%', favorited: false },
+  { symbol: 'WTIUSD', display: 'WTI Oil', category: 'commodities', returnRate: '+92%', favorited: false },
+  { symbol: 'NATGAS', display: 'Natural Gas', category: 'commodities', returnRate: '+92%', favorited: false },
+  
+  // Indices
+  { symbol: 'US500', display: 'S&P 500', category: 'indices', returnRate: '+92%', favorited: false },
+  { symbol: 'US100', display: 'Nasdaq 100', category: 'indices', returnRate: '+92%', favorited: false },
+  { symbol: 'US30', display: 'Dow Jones', category: 'indices', returnRate: '+92%', favorited: false },
+  { symbol: 'DE40', display: 'DAX', category: 'indices', returnRate: '+92%', favorited: false },
+  { symbol: 'UK100', display: 'FTSE 100', category: 'indices', returnRate: '+92%', favorited: false },
+  { symbol: 'JP225', display: 'Nikkei 225', category: 'indices', returnRate: '+92%', favorited: false },
+  
+  // Stocks
+  { symbol: 'AAPL', display: 'Apple', category: 'stocks', returnRate: '+92%', favorited: false },
+  { symbol: 'MSFT', display: 'Microsoft', category: 'stocks', returnRate: '+92%', favorited: false },
+  { symbol: 'GOOGL', display: 'Google', category: 'stocks', returnRate: '+92%', favorited: false },
+  { symbol: 'AMZN', display: 'Amazon', category: 'stocks', returnRate: '+92%', favorited: false },
+  { symbol: 'TSLA', display: 'Tesla', category: 'stocks', returnRate: '+92%', favorited: false },
+  { symbol: 'META', display: 'Meta', category: 'stocks', returnRate: '+92%', favorited: false },
+  { symbol: 'NVDA', display: 'NVIDIA', category: 'stocks', returnRate: '+92%', favorited: false },
+]);
+
+const symbolCategories = [
+  { id: 'favorites', label: '收藏', icon: Star },
+  { id: 'crypto', label: '加密货币', icon: Activity },
+  { id: 'forex', label: '外汇', icon: DollarSign },
+  { id: 'commodities', label: '大宗商品', icon: Layers },
+  { id: 'indices', label: '指数', icon: TrendingUp },
+  { id: 'stocks', label: '股票', icon: BarChart2 },
+];
+
+const filteredSymbols = computed(() => {
+  let symbols = tradingPairs.value;
+  
+  // Filter by category
+  if (activeSymbolCategory.value === 'favorites') {
+    symbols = symbols.filter(s => s.favorited);
+  } else {
+    symbols = symbols.filter(s => s.category === activeSymbolCategory.value);
+  }
+  
+  // Filter by search query
+  if (symbolSearchQuery.value.trim()) {
+    const query = symbolSearchQuery.value.toLowerCase();
+    symbols = symbols.filter(s => 
+      s.symbol.toLowerCase().includes(query) || 
+      s.display.toLowerCase().includes(query)
+    );
+  }
+  
+  return symbols;
+});
+
+const toggleFavorite = (symbol) => {
+  const pair = tradingPairs.value.find(p => p.symbol === symbol);
+  if (pair) {
+    pair.favorited = !pair.favorited;
+  }
+};
+
+// Update allowed symbols for the store
+const allowedSymbols = computed(() => tradingPairs.value.map(p => p.symbol));
 
 // Configuration Lists
 const timeframesConfig = [
@@ -525,20 +662,51 @@ watch(currentPrice, (newVal) => {
 });
 
 const symbolLabel = (sym) => {
-  const labels = {
-    EURUSD: 'EUR/USD',
-    BTCUSDT: 'BTC/USDT',
-    ETHUSDT: 'ETH/USDT',
-    S1: 'S1/USDT',
-  };
-  return labels[sym] || sym;
+  const pair = tradingPairs.value.find(p => p.symbol === sym);
+  return pair ? pair.display : sym;
 };
 
 const precisionMap = {
-  EURUSD: 5,
+  // Crypto
   BTCUSDT: 2,
   ETHUSDT: 2,
-  S1: 2,
+  BNBUSDT: 2,
+  XRPUSDT: 4,
+  ADAUSDT: 4,
+  SOLUSDT: 2,
+  DOGEUSDT: 6,
+  DOTUSDT: 3,
+  // Forex
+  EURUSD: 5,
+  GBPUSD: 5,
+  USDJPY: 3,
+  AUDUSD: 5,
+  USDCAD: 5,
+  NZDUSD: 5,
+  EURGBP: 5,
+  EURJPY: 3,
+  GBPJPY: 3,
+  AUDJPY: 3,
+  // Commodities
+  XAUUSD: 2,
+  XAGUSD: 3,
+  WTIUSD: 2,
+  NATGAS: 3,
+  // Indices
+  US500: 2,
+  US100: 2,
+  US30: 2,
+  DE40: 2,
+  UK100: 2,
+  JP225: 2,
+  // Stocks
+  AAPL: 2,
+  MSFT: 2,
+  GOOGL: 2,
+  AMZN: 2,
+  TSLA: 2,
+  META: 2,
+  NVDA: 2,
 };
 
 const pricePrecision = computed(() => {
@@ -1278,7 +1446,7 @@ const handleOutsideClick = (e) => {
   pointer-events: none;
 }
 
-.symbol-block, .toolbar-actions {
+.toolbar-actions {
   pointer-events: auto;
   background: rgba(12, 16, 27, 0.8);
   backdrop-filter: blur(12px);
@@ -1292,38 +1460,225 @@ const handleOutsideClick = (e) => {
 }
 
 .symbol-block {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  background: rgba(12, 16, 27, 0.8);
+  backdrop-filter: blur(12px);
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
 .toolbar-actions {
   align-items: center;
 }
 
-.symbol-select-wrapper select {
+.symbol-select-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.symbol-btn {
   appearance: none;
-  background: transparent !important;
-  border: none !important;
+  background: transparent;
+  border: none;
   color: #fff;
-  padding: 8px 32px 8px 12px;
+  padding: 4px 8px;
   border-radius: 8px;
-  min-width: 140px;
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.symbol-select-wrapper select:hover {
+.symbol-btn:hover {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.select-arrow {
+.floating-side-panel.symbol-panel {
+  width: 360px;
+  left: 24px;
+  right: auto;
+}
+
+.symbol-search-box {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.search-icon {
   position: absolute;
-  right: 12px;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7a99;
   pointer-events: none;
+}
+
+.symbol-search-input {
+  width: 100%;
+  padding: 10px 12px 10px 36px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.symbol-search-input::placeholder {
+  color: #6b7a99;
+}
+
+.symbol-search-input:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(93, 247, 194, 0.3);
+}
+
+.symbol-categories {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.category-btn {
+  flex: 1;
+  min-width: 80px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
   color: #8fa1c4;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.category-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(93, 247, 194, 0.3);
+  color: #dbe3f5;
+}
+
+.category-btn.active {
+  background: rgba(93, 247, 194, 0.15);
+  border-color: rgba(93, 247, 194, 0.5);
+  color: #5df7c2;
+}
+
+.symbol-menu-content .symbols-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.symbol-menu-content .symbols-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.symbol-menu-content .symbols-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 3px;
+}
+
+.symbol-menu-content .symbols-list::-webkit-scrollbar-thumb {
+  background: rgba(93, 247, 194, 0.3);
+  border-radius: 3px;
+}
+
+.symbol-menu-content .symbols-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(93, 247, 194, 0.5);
+}
+
+.symbol-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #dbe3f5;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.symbol-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(93, 247, 194, 0.3);
+}
+
+.symbol-item.active {
+  background: rgba(93, 247, 194, 0.1);
+  border-color: rgba(93, 247, 194, 0.5);
+  color: #5df7c2;
+}
+
+.symbol-item-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.star-btn {
+  background: none;
+  border: none;
+  color: #6b7a99;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.star-btn:hover {
+  color: #ffbe3d;
+  transform: scale(1.1);
+}
+
+.star-btn.favorited {
+  color: #ffbe3d;
+}
+
+.symbol-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.symbol-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.symbol-return {
+  font-size: 11px;
+  color: #5df7c2;
+  font-weight: 500;
+}
+
+.check-icon {
+  color: #5df7c2;
 }
 
 .price-ticker {
@@ -1346,34 +1701,43 @@ const handleOutsideClick = (e) => {
   text-shadow: 0 0 20px rgba(255, 123, 123, 0.3);
 }
 
-.price-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
 .market-stats {
+  pointer-events: auto;
   display: flex;
-  gap: 12px;
-  font-size: 11px;
+  gap: 16px;
+  font-size: 12px;
+  padding: 8px 12px;
+  background: rgba(12, 16, 27, 0.8);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
 }
 
 .stat-item {
   display: flex;
-  gap: 4px;
-  color: #8fa1c4;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.stat-item.up {
-  color: #5df7c2;
-}
-.stat-item.down {
-  color: #ff7b7b;
+.stat-label {
+  font-size: 10px;
+  color: #6b7a99;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
 }
 
 .stat-value {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  color: #dbe3f5;
+}
+
+.stat-item.up .stat-value {
+  color: #5df7c2;
+}
+.stat-item.down .stat-value {
+  color: #ff7b7b;
 }
 
 .toolbar-right {
@@ -1479,12 +1843,15 @@ const handleOutsideClick = (e) => {
   display: flex;
   justify-content: space-between;
   pointer-events: none;
+  z-index: 10;
 }
 .chart-overlay.top {
   top: 0;
+  justify-content: flex-start;
 }
 .chart-overlay.bottom {
   bottom: 0;
+  justify-content: flex-start;
 }
 
 .toolbar-blur {
