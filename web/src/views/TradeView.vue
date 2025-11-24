@@ -1506,6 +1506,7 @@ const handleOutsideClick = (e) => {
   width: 360px;
   left: 24px;
   right: auto;
+  top: 88px;
 }
 
 .symbol-search-box {
@@ -1532,6 +1533,7 @@ const handleOutsideClick = (e) => {
   font-size: 13px;
   outline: none;
   transition: all 0.2s;
+  box-sizing: border-box;
 }
 
 .symbol-search-input::placeholder {
@@ -1584,7 +1586,7 @@ const handleOutsideClick = (e) => {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 400px;
+  max-height: 350px;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -2572,8 +2574,9 @@ const handleOutsideClick = (e) => {
 
 .panel-content {
   flex: 1;
-  overflow-y: auto;
   padding: 16px;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Content Specific Styles */
