@@ -514,7 +514,7 @@
               <span class="badge accent">实时脉冲</span>
             </div>
             <div class="signal-list">
-              <div v-for="sig in signalFeed" :key="sig.title" class="signal-row" @click="handleSignalTrade(sig)" @contextmenu.prevent="showSignalDetail = true; selectedSignal = sig">
+              <div v-for="sig in signalFeed" :key="sig.title" :class="['signal-row', { 'signal-new': sig.isNew }]" @click="handleSignalTrade(sig)" @contextmenu.prevent="showSignalDetail = true; selectedSignal = sig">
                 <div class="signal-meta">
                   <div class="signal-title">{{ sig.title }}</div>
                   <div class="signal-sub">{{ sig.metric }}</div>
@@ -977,6 +977,7 @@ let resizeObserver;
 let timerInterval;
 let historyInterval;
 let candleInterval;
+let signalInterval;
 let drawings = [];
 let drawingMode = false;
 
@@ -1584,6 +1585,11 @@ onMounted(async () => {
 
   restartCandleInterval();
 
+  // 信号推送间隔 - 模拟实时信号
+  signalInterval = setInterval(() => {
+    pushNewSignal();
+  }, 12000); // 每12秒推送一条新信号
+
   chart.subscribeClick((param) => {
     if (!drawingMode) return;
     const price = currentPrice.value || (param.seriesData && param.seriesData.get(series)?.close);
@@ -1603,6 +1609,7 @@ onUnmounted(() => {
   clearInterval(timerInterval);
   clearInterval(historyInterval);
   clearInterval(candleInterval);
+  clearInterval(signalInterval);
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
   window.removeEventListener('resize', handleResize);
   clearDrawings();
@@ -1711,6 +1718,47 @@ const handleSignalTrade = async (signal) => {
     }, 3000);
   } catch (error) {
     errorMsg.value = `⚠ 下单失败: ${error.response?.data?.error || error.message || 'Unknown error'}`;
+  }
+};
+
+const pushNewSignal = () => {
+  // 新信号数据池
+  const signalPool = [
+    { title: 'GBP/USD 上破', metric: 'RSI 65 · 突破阻力', confidence: 0.79, action: 'CALL', timing: '2m', symbol: 'GBPUSD', amount: 40, duration: 120 },
+    { title: 'ETH/USDT 下行', metric: '布林下轨测试', confidence: 0.75, action: 'PUT', timing: '3m', symbol: 'ETHUSDT', amount: 75, duration: 180 },
+    { title: 'Gold 反弹', metric: '动量 +0.8σ', confidence: 0.71, action: 'CALL', timing: '5m', symbol: 'XAUUSD', amount: 30, duration: 300 },
+    { title: 'US100 均线黄金交叉', metric: 'MA20 穿 MA50', confidence: 0.86, action: 'CALL', timing: '4m', symbol: 'US100', amount: 60, duration: 240 },
+    { title: 'Oil 下跌', metric: 'MACD 负值扩大', confidence: 0.73, action: 'PUT', timing: '2m', symbol: 'WTIUSD', amount: 45, duration: 120 },
+    { title: 'USDJPY 震荡', metric: 'RSI 50 · 中性信号', confidence: 0.68, action: 'CALL', timing: '1m', symbol: 'USDJPY', amount: 20, duration: 60 },
+    { title: 'S&P500 新高', metric: 'ADX 强势向上', confidence: 0.81, action: 'CALL', timing: '5m', symbol: 'US500', amount: 80, duration: 300 },
+  ];
+
+  // 随机选择一个新信号
+  const newSignal = signalPool[Math.floor(Math.random() * signalPool.length)];
+  
+  // 检查是否已存在相同的信号(避免重复)
+  const exists = signalFeed.value.some(sig => sig.title === newSignal.title);
+  if (exists) {
+    return;
+  }
+
+  // 在列表头部插入新信号
+  signalFeed.value.unshift({
+    ...newSignal,
+    isNew: true, // 标记为新信号，用于动画
+  });
+
+  // 移除 isNew 标记以停止动画(500ms后)
+  setTimeout(() => {
+    const idx = signalFeed.value.findIndex(s => s.title === newSignal.title);
+    if (idx !== -1) {
+      signalFeed.value[idx].isNew = false;
+    }
+  }, 500);
+
+  // 限制信号列表不超过20条
+  if (signalFeed.value.length > 20) {
+    signalFeed.value.pop();
   }
 };
 </script>
@@ -3108,6 +3156,28 @@ const handleSignalTrade = async (signal) => {
   border-color: rgba(93, 247, 194, 0.3);
   box-shadow: 0 4px 16px rgba(93, 247, 194, 0.1);
   transform: translateY(-1px);
+}
+
+.signal-row.signal-new {
+  animation: signalPulse 0.5s ease-out;
+  background: rgba(93, 247, 194, 0.1);
+  border-color: rgba(93, 247, 194, 0.4);
+}
+
+@keyframes signalPulse {
+  0% {
+    transform: translateX(-20px);
+    opacity: 0;
+    background: rgba(93, 247, 194, 0.2);
+  }
+  50% {
+    background: rgba(93, 247, 194, 0.15);
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.03);
+  }
 }
 
 .signal-meta,
