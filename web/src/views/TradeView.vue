@@ -397,11 +397,17 @@
               </button>
             </div>
             <div class="modal-body">
-              <div class="input-row">
-                <label>Amount (USDT)</label>
-                <div class="input-wrapper">
-                  <DollarSign :size="14" class="input-icon" />
-                  <input type="number" v-model="depositAmount" min="1" placeholder="Enter amount" />
+              <div class="deposit-input-group">
+                <label class="deposit-label">Amount</label>
+                <div class="deposit-input-wrapper">
+                  <span class="currency-prefix">USDT</span>
+                  <input 
+                    type="number" 
+                    v-model="depositAmount" 
+                    min="1" 
+                    placeholder="0.00"
+                    class="deposit-input"
+                  />
                 </div>
               </div>
               <div class="quick-amounts">
@@ -2783,6 +2789,78 @@ const handleOutsideClick = (e) => {
   padding: 24px;
 }
 
+.deposit-input-group {
+  margin-bottom: 20px;
+}
+
+.deposit-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #8fa1c4;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.deposit-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.deposit-input-wrapper:focus-within {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(93, 247, 194, 0.5);
+  box-shadow: 0 0 0 4px rgba(93, 247, 194, 0.1);
+}
+
+.currency-prefix {
+  padding: 16px 0 16px 20px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #5df7c2;
+  background: rgba(93, 247, 194, 0.1);
+  border-right: 2px solid rgba(93, 247, 194, 0.2);
+  min-width: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.deposit-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 16px 20px;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 600;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.deposit-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+  font-weight: 500;
+}
+
+.deposit-input::-webkit-outer-spin-button,
+.deposit-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.deposit-input[type=number] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
 .modal-footer {
   display: flex;
   gap: 12px;
@@ -2800,21 +2878,45 @@ const handleOutsideClick = (e) => {
 .quick-btn {
   flex: 1;
   min-width: 70px;
-  padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
   color: #8fa1c4;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.quick-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(93, 247, 194, 0.1) 0%, rgba(61, 255, 181, 0.1) 100%);
+  opacity: 0;
+  transition: opacity 0.2s;
 }
 
 .quick-btn:hover {
-  background: rgba(93, 247, 194, 0.1);
-  border-color: rgba(93, 247, 194, 0.3);
+  background: rgba(93, 247, 194, 0.05);
+  border-color: rgba(93, 247, 194, 0.4);
   color: #5df7c2;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(93, 247, 194, 0.2);
+}
+
+.quick-btn:hover::before {
+  opacity: 1;
+}
+
+.quick-btn:active {
+  transform: translateY(0);
 }
 
 .btn-primary {
