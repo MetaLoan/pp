@@ -514,109 +514,132 @@
               <span class="badge accent">实时脉冲</span>
             </div>
             
-            <!-- 信号控制栏 -->
-            <div class="signal-controls">
-              <div class="control-group">
-                <span class="control-label">排序</span>
-                <select v-model="signalSortBy" class="control-select">
-                  <option value="new">最新优先</option>
-                  <option value="confidence">信心度 ↓</option>
-                  <option value="timing">时间框架</option>
-                </select>
-              </div>
-              <div class="control-group">
-                <span class="control-label">方向</span>
-                <div class="filter-buttons">
-                  <button :class="['filter-btn', { active: signalFilterAction === 'all' }]" @click="signalFilterAction = 'all'">
-                    全部
-                  </button>
-                  <button :class="['filter-btn', 'filter-call', { active: signalFilterAction === 'CALL' }]" @click="signalFilterAction = 'CALL'">
-                    CALL
-                  </button>
-                  <button :class="['filter-btn', 'filter-put', { active: signalFilterAction === 'PUT' }]" @click="signalFilterAction = 'PUT'">
-                    PUT
-                  </button>
-                </div>
-              </div>
-              <div class="control-group">
-                <span class="control-label">周期</span>
-                <div class="filter-buttons">
-                  <button :class="['filter-btn', { active: signalFilterTiming === 'all' }]" @click="signalFilterTiming = 'all'" style="width: 40px">
-                    全
-                  </button>
-                  <button v-for="t in ['1m', '2m', '3m', '4m', '5m']" :key="t" :class="['filter-btn', { active: signalFilterTiming === t }]" @click="signalFilterTiming = t" style="width: 40px">
-                    {{ t }}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div class="signal-list">
-              <div v-for="sig in filteredSignals" :key="sig.title" :class="['signal-row', { 'signal-new': sig.isNew, 'signal-expired': !getSignalValidity(sig).isValid }]" @click="handleSignalTrade(sig)" @contextmenu.prevent="showSignalDetail = true; selectedSignal = sig">
-                <div class="signal-meta">
-                  <div class="signal-header">
-                    <div class="signal-title">{{ sig.title }}</div>
-                    <div class="signal-meta-info">
-                      <span class="signal-time">{{ formatSignalTime(sig.createdAt) }}</span>
-                      <span class="signal-copies">📋 {{ sig.copied }}</span>
-                    </div>
-                  </div>
-                  <div class="signal-sub">{{ sig.metric }}</div>
-                  <div class="signal-confidence">
-                    <div class="confidence-bar">
-                      <span class="confidence-fill" :style="{ width: Math.round(sig.confidence * 100) + '%' }"></span>
-                    </div>
-                    <span class="confidence-label">{{ Math.round(sig.confidence * 100) }}%</span>
-                  </div>
-                </div>
-                <div class="signal-actions">
-                  <div v-if="getSignalValidity(sig).isValid" class="validity-timer">
-                    <svg width="36" height="36" viewBox="0 0 36 36" style="transform: rotate(-90deg)">
-                      <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
-                      <circle cx="18" cy="18" r="16" fill="none" :stroke="sig.action === 'CALL' ? '#5df7c2' : '#ff7b7b'" stroke-width="2" 
-                        :style="{ strokeDasharray: `${getSignalValidity(sig).percent * 1.005} 100`, transition: 'stroke-dasharray 0.3s' }"/>
-                    </svg>
-                    <span class="timer-text">{{ Math.ceil(getSignalValidity(sig).remaining / 1000) }}s</span>
-                  </div>
-                  <span v-else class="pill pill-soft" style="opacity: 0.5">已过期</span>
-                  <button :class="['pill', 'signal-btn', sig.action === 'CALL' ? 'pill-green' : 'pill-red']" @click.stop="handleSignalTrade(sig)" :disabled="!getSignalValidity(sig).isValid">
-                    {{ sig.action }}
-                  </button>
-                  <button class="pill pill-soft signal-detail-btn" @click.stop="showSignalDetail = true; selectedSignal = sig" title="查看详情">
-                    ℹ
-                  </button>
-                </div>
-              </div>
-              <div v-if="filteredSignals.length === 0" class="signal-empty">
-                <Antenna :size="32" />
-                <span>暂无符合条件的信号</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Market Overview (Currency List with Trend Arrows) -->
-          <div v-else-if="activeRightModule === 'market'" class="card market-card">
-            <div class="card-head">
-              <span><Activity :size="14" /> 货币行情</span>
-              <span class="badge">实时</span>
-            </div>
-            <div class="market-grid">
-              <button 
-                v-for="pair in tradingPairs.slice(0, 12)" 
-                :key="pair.symbol"
-                class="market-pair-item"
-                @click="selectedSymbol = pair.symbol; activeRightModule = 'orders'"
-              >
-                <div class="pair-symbol">{{ pair.display }}</div>
-                <div class="pair-trend">
-                  <span v-if="getRandomTrendStrength() >= 0.6" :class="['trend-arrow', getRandomTrendDirection() > 0 ? 'up' : 'down']">
-                    {{ getRandomTrendDirection() > 0 ? '↑↑' : '↓↓' }}
-                  </span>
-                  <span v-else :class="['trend-arrow', getRandomTrendDirection() > 0 ? 'up' : 'down']">
-                    {{ getRandomTrendDirection() > 0 ? '↑' : '↓' }}
-                  </span>
-                </div>
+            <!-- Signal Tabs -->
+            <div class="signal-tabs">
+              <button :class="['signal-tab', { active: activeSignalTab === 'signals' }]" @click="activeSignalTab = 'signals'">
+                <Antenna :size="14" /> 交易信号
               </button>
+              <button :class="['signal-tab', { active: activeSignalTab === 'markets' }]" @click="activeSignalTab = 'markets'">
+                <Activity :size="14" /> 切换标的
+              </button>
+            </div>
+            
+            <!-- Tab 1: Trading Signals (current symbol only) -->
+            <div v-show="activeSignalTab === 'signals'">
+              <!-- 信号控制栏 -->
+              <div class="signal-controls">
+                <div class="control-group">
+                  <span class="control-label">排序</span>
+                  <select v-model="signalSortBy" class="control-select">
+                    <option value="new">最新优先</option>
+                    <option value="confidence">信心度 ↓</option>
+                    <option value="timing">时间框架</option>
+                  </select>
+                </div>
+                <div class="control-group">
+                  <span class="control-label">方向</span>
+                  <div class="filter-buttons">
+                    <button :class="['filter-btn', { active: signalFilterAction === 'all' }]" @click="signalFilterAction = 'all'">
+                      全部
+                    </button>
+                    <button :class="['filter-btn', 'filter-call', { active: signalFilterAction === 'CALL' }]" @click="signalFilterAction = 'CALL'">
+                      CALL
+                    </button>
+                    <button :class="['filter-btn', 'filter-put', { active: signalFilterAction === 'PUT' }]" @click="signalFilterAction = 'PUT'">
+                      PUT
+                    </button>
+                  </div>
+                </div>
+                <div class="control-group">
+                  <span class="control-label">周期</span>
+                  <div class="filter-buttons">
+                    <button :class="['filter-btn', { active: signalFilterTiming === 'all' }]" @click="signalFilterTiming = 'all'" style="width: 40px">
+                      全
+                    </button>
+                    <button v-for="t in ['1m', '2m', '3m', '4m', '5m']" :key="t" :class="['filter-btn', { active: signalFilterTiming === t }]" @click="signalFilterTiming = t" style="width: 40px">
+                      {{ t }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="signal-list">
+                <div v-for="sig in filteredSignals" :key="sig.title" :class="['signal-row', { 'signal-new': sig.isNew, 'signal-expired': !getSignalValidity(sig).isValid }]" @click="handleSignalTrade(sig)" @contextmenu.prevent="showSignalDetail = true; selectedSignal = sig">
+                  <div class="signal-meta">
+                    <div class="signal-header">
+                      <div class="signal-title">{{ sig.title }}</div>
+                      <div class="signal-meta-info">
+                        <span class="signal-time">{{ formatSignalTime(sig.createdAt) }}</span>
+                        <span class="signal-copies">📋 {{ sig.copied }}</span>
+                      </div>
+                    </div>
+                    <div class="signal-sub">{{ sig.metric }}</div>
+                    <div class="signal-confidence">
+                      <div class="confidence-bar">
+                        <span class="confidence-fill" :style="{ width: Math.round(sig.confidence * 100) + '%' }"></span>
+                      </div>
+                      <span class="confidence-label">{{ Math.round(sig.confidence * 100) }}%</span>
+                    </div>
+                  </div>
+                  <div class="signal-actions">
+                    <div v-if="getSignalValidity(sig).isValid" class="validity-timer">
+                      <svg width="36" height="36" viewBox="0 0 36 36" style="transform: rotate(-90deg)">
+                        <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
+                        <circle cx="18" cy="18" r="16" fill="none" :stroke="sig.action === 'CALL' ? '#5df7c2' : '#ff7b7b'" stroke-width="2" 
+                          :style="{ strokeDasharray: `${getSignalValidity(sig).percent * 1.005} 100`, transition: 'stroke-dasharray 0.3s' }"/>
+                      </svg>
+                      <span class="timer-text">{{ Math.ceil(getSignalValidity(sig).remaining / 1000) }}s</span>
+                    </div>
+                    <span v-else class="pill pill-soft" style="opacity: 0.5">已过期</span>
+                    <button :class="['pill', 'signal-btn', sig.action === 'CALL' ? 'pill-green' : 'pill-red']" @click.stop="handleSignalTrade(sig)" :disabled="!getSignalValidity(sig).isValid">
+                      {{ sig.action }}
+                    </button>
+                    <button class="pill pill-soft signal-detail-btn" @click.stop="showSignalDetail = true; selectedSignal = sig" title="查看详情">
+                      ℹ
+                    </button>
+                  </div>
+                </div>
+                <div v-if="filteredSignals.length === 0" class="signal-empty">
+                  <Antenna :size="32" />
+                  <span>暂无符合条件的信号</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Tab 2: Market Trends by Timeframe -->
+            <div v-show="activeSignalTab === 'markets'" class="market-trends-view">
+              <div class="timeframe-selector">
+                <button v-for="tf in ['1m', '2m', '3m', '4m', '5m']" :key="tf" 
+                  :class="['tf-btn', { active: signalFilterTiming === tf || (signalFilterTiming === 'all' && tf === '1m') }]"
+                  @click="signalFilterTiming = tf">
+                  {{ tf }}
+                </button>
+              </div>
+              
+              <div class="market-pairs-grid">
+                <div v-for="marketData in marketTrends" :key="marketData.symbol" class="market-pair-card">
+                  <div class="pair-header">
+                    <span class="pair-name">{{ marketData.display }}</span>
+                    <button class="pair-switch-btn" @click="selectedSymbol = marketData.symbol; activeRightModule = 'orders'" title="切换到此标的">
+                      →
+                    </button>
+                  </div>
+                  <div class="trend-for-timeframe">
+                    <div v-if="signalFilterTiming === 'all' || signalFilterTiming === '1m'" class="trend-item">
+                      <span class="trend-label">1m</span>
+                      <span :class="['trend-strength', marketData.trends['1m'].direction > 0 ? 'up' : 'down']">
+                        {{ getTrendArrows(marketData.trends['1m'].strength, marketData.trends['1m'].direction) }}
+                      </span>
+                    </div>
+                    <div v-else class="trend-item">
+                      <span class="trend-label">{{ signalFilterTiming }}</span>
+                      <span :class="['trend-strength', marketData.trends[signalFilterTiming].direction > 0 ? 'up' : 'down']">
+                        {{ getTrendArrows(marketData.trends[signalFilterTiming].strength, marketData.trends[signalFilterTiming].direction) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -883,7 +906,6 @@ const activeRightModule = ref('orders');
 const rightDockItems = [
   { id: 'orders', label: 'Orders', icon: History },
   { id: 'signals', label: 'Signals', icon: Antenna },
-  { id: 'market', label: 'Market', icon: Activity },
   { id: 'social', label: 'Social', icon: Users },
   { id: 'quick', label: 'Quick Trade', icon: Target },
   { id: 'pending', label: 'Pending', icon: Hourglass },
@@ -895,6 +917,9 @@ const signalFeed = ref([
   { title: 'BTC/USDT 回踩', metric: 'RSI 34 · 趋势向上', confidence: 0.74, action: 'CALL', timing: '3m', symbol: 'BTCUSDT', amount: 100, duration: 180, copied: 856, createdAt: Date.now() - 120000, validity: 180000 },
   { title: 'XAU/USD 拐点', metric: '布林中轨反弹', confidence: 0.68, action: 'PUT', timing: '1m', symbol: 'XAUUSD', amount: 25, duration: 60, copied: 543, createdAt: Date.now() - 60000, validity: 60000 },
 ]);
+
+// Signal module tabs
+const activeSignalTab = ref('signals'); // 'signals' | 'markets'
 
 const socialLeaders = ref([
   { name: 'NovaQuant', initials: 'NQ', region: '新加坡', winRate: 78, roi: 34, copiers: '2.1k' },
@@ -1028,6 +1053,14 @@ const filteredSignals = computed(() => {
     signals = signals.filter(s => s.action === signalFilterAction.value);
   }
 
+  // 按标的过滤（仅显示当前选中标的的信号）
+  signals = signals.filter(s => s.symbol === selectedSymbol.value);
+
+  // 按时间框架过滤
+  if (signalFilterTiming.value !== 'all') {
+    signals = signals.filter(s => s.timing === signalFilterTiming.value);
+  }
+
   // 按条件排序
   const sorted = [...signals];
   switch (signalSortBy.value) {
@@ -1051,6 +1084,26 @@ const filteredSignals = computed(() => {
   }
 
   return sorted;
+});
+
+// 时间框架市场数据（用于切换标的Tab）
+const marketTrends = computed(() => {
+  // 为所有交易对和时间框架生成趋势数据
+  return tradingPairs.value.map(pair => {
+    const timeframes = ['1m', '2m', '3m', '4m', '5m'];
+    const trends = {};
+    timeframes.forEach(tf => {
+      const key = `${pair.symbol}-${tf}`;
+      trends[tf] = {
+        symbol: pair.symbol,
+        display: pair.display,
+        timeframe: tf,
+        strength: getRandomTrendStrength(key),
+        direction: getRandomTrendDirection(key),
+      };
+    });
+    return { symbol: pair.symbol, display: pair.display, trends };
+  });
 });
 
 // Configuration Lists
@@ -1140,6 +1193,7 @@ const getSignalValidity = (signal) => {
 const trendCache = new Map();
 const getRandomTrendStrength = (symbol = '') => {
   // 缓存趋势强度避免闪烁
+  // 返回0-1，表示1-2个箭头（0.5及以上 = 2个箭头，以下 = 1个箭头）
   if (!trendCache.has(`strength-${symbol}`)) {
     trendCache.set(`strength-${symbol}`, Math.random());
   }
@@ -1152,6 +1206,13 @@ const getRandomTrendDirection = (symbol = '') => {
     trendCache.set(`direction-${symbol}`, Math.random() > 0.5 ? 1 : -1);
   }
   return trendCache.get(`direction-${symbol}`);
+};
+
+// 获取箭头显示（1-2个）
+const getTrendArrows = (strength, direction) => {
+  const arrowCount = strength >= 0.5 ? 2 : 1;
+  const arrow = direction > 0 ? '↑' : '↓';
+  return arrow.repeat(arrowCount);
 };
 
 // Market Stats Calculations
@@ -3358,71 +3419,172 @@ const pushNewSignal = () => {
   gap: 10px;
 }
 
-/* Market Grid */
-.market-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+/* Signal Tabs */
+.signal-tabs {
+  display: flex;
   gap: 8px;
-  max-height: 400px;
-  overflow-y: auto;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.02);
 }
 
-.market-pair-item {
+.signal-tab {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  padding: 12px 8px;
-  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  color: #fff;
+  color: #8fa1c4;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   font-size: 12px;
   font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.market-pair-item:hover {
-  background: rgba(93, 247, 194, 0.1);
-  border-color: rgba(93, 247, 194, 0.3);
-  box-shadow: 0 4px 12px rgba(93, 247, 194, 0.15);
-  transform: translateY(-2px);
+.signal-tab:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(93, 247, 194, 0.2);
+  color: #fff;
 }
 
-.pair-symbol {
-  font-size: 11px;
-  font-weight: 700;
-  color: #8fa1c4;
-  text-transform: uppercase;
-}
-
-.pair-trend {
-  font-size: 16px;
-  font-weight: 700;
-  transition: all 0.3s;
-}
-
-.trend-arrow {
-  display: inline-block;
-}
-
-.trend-arrow.up {
+.signal-tab.active {
+  background: rgba(93, 247, 194, 0.15);
+  border-color: rgba(93, 247, 194, 0.4);
   color: #5df7c2;
 }
 
-.trend-arrow.down {
-  color: #ff7b7b;
-}
-
-.market-pair-item:hover .trend-arrow {
-  transform: scale(1.1);
-}
-
-/* Market Card */
-.market-card .card-body {
+/* Market Trends View */
+.market-trends-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   padding: 12px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.timeframe-selector {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tf-btn {
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #8fa1c4;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.tf-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(93, 247, 194, 0.2);
+}
+
+.tf-btn.active {
+  background: rgba(93, 247, 194, 0.2);
+  color: #5df7c2;
+  border-color: rgba(93, 247, 194, 0.4);
+}
+
+.market-pairs-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.market-pair-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+
+.market-pair-card:hover {
+  background: rgba(93, 247, 194, 0.1);
+  border-color: rgba(93, 247, 194, 0.3);
+  box-shadow: 0 4px 12px rgba(93, 247, 194, 0.1);
+}
+
+.pair-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.pair-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.pair-switch-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: rgba(93, 247, 194, 0.15);
+  border: 1px solid rgba(93, 247, 194, 0.2);
+  color: #5df7c2;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pair-switch-btn:hover {
+  background: rgba(93, 247, 194, 0.25);
+  border-color: rgba(93, 247, 194, 0.4);
+  transform: scale(1.05);
+}
+
+.trend-for-timeframe {
+  display: flex;
+  gap: 10px;
+}
+
+.trend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.trend-label {
+  font-size: 10px;
+  color: #6b7a99;
+  font-weight: 600;
+  min-width: 20px;
+  text-align: center;
+}
+
+.trend-strength {
+  font-size: 16px;
+  font-weight: 700;
+  flex: 1;
+}
+
+.trend-strength.up {
+  color: #5df7c2;
+}
+
+.trend-strength.down {
+  color: #ff7b7b;
 }
 
 .signal-row,
