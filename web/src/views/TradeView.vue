@@ -1561,6 +1561,7 @@ const handleOutsideClick = (e) => {
   flex-direction: column;
   gap: 8px;
   flex: 0 0 auto;
+  width: 150px;
 }
 
 .input-group-compact .input-label {
@@ -1590,7 +1591,8 @@ const handleOutsideClick = (e) => {
   padding: 2px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
-  min-width: 140px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .input-group-compact .input-field-readonly {
@@ -1611,6 +1613,8 @@ const handleOutsideClick = (e) => {
   font-size: 15px;
   font-weight: 800;
   text-align: center;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .input-group-compact .input-field:hover {
@@ -1633,7 +1637,7 @@ const handleOutsideClick = (e) => {
   color: #fff;
   font-size: 15px;
   font-weight: 700;
-  min-width: 100px;
+  width: 100%;
   box-sizing: border-box;
   outline: none;
 }
