@@ -112,6 +112,22 @@
               </div>
             </div>
 
+            <!-- 快速货币切换器 -->
+            <div class="quick-symbols">
+              <button 
+                v-for="sym in tradingPairs.filter(p => p.favorited).slice(0, 6)" 
+                :key="sym.symbol"
+                :class="['quick-symbol-btn', { active: selectedSymbol === sym.symbol }]"
+                @click="selectedSymbol = sym.symbol"
+                :title="sym.display"
+              >
+                <span class="symbol-code">{{ sym.symbol.replace('USDT', '').replace('USD', '') }}</span>
+                <span :class="['arrow', 'arrow-' + (Math.random() > 0.5 ? 'up' : 'down')]">
+                  {{ Math.random() > 0.5 ? '↑' : '↓' }}
+                </span>
+              </button>
+            </div>
+
             <div class="toolbar-actions">
               <!-- Chart & Timeframe Menu -->
               <div class="tool-wrapper">
@@ -525,7 +541,7 @@
                 </select>
               </div>
               <div class="control-group">
-                <span class="control-label">筛选</span>
+                <span class="control-label">方向</span>
                 <div class="filter-buttons">
                   <button :class="['filter-btn', { active: signalFilterAction === 'all' }]" @click="signalFilterAction = 'all'">
                     全部
@@ -538,12 +554,29 @@
                   </button>
                 </div>
               </div>
+              <div class="control-group">
+                <span class="control-label">周期</span>
+                <div class="filter-buttons">
+                  <button :class="['filter-btn', { active: signalFilterTiming === 'all' }]" @click="signalFilterTiming = 'all'" style="width: 40px">
+                    全
+                  </button>
+                  <button v-for="t in ['1m', '2m', '3m', '4m', '5m']" :key="t" :class="['filter-btn', { active: signalFilterTiming === t }]" @click="signalFilterTiming = t" style="width: 40px">
+                    {{ t }}
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div class="signal-list">
-              <div v-for="sig in filteredSignals" :key="sig.title" :class="['signal-row', { 'signal-new': sig.isNew }]" @click="handleSignalTrade(sig)" @contextmenu.prevent="showSignalDetail = true; selectedSignal = sig">
+              <div v-for="sig in filteredSignals" :key="sig.title" :class="['signal-row', { 'signal-new': sig.isNew, 'signal-expired': !getSignalValidity(sig).isValid }]" @click="handleSignalTrade(sig)" @contextmenu.prevent="showSignalDetail = true; selectedSignal = sig">
                 <div class="signal-meta">
-                  <div class="signal-title">{{ sig.title }}</div>
+                  <div class="signal-header">
+                    <div class="signal-title">{{ sig.title }}</div>
+                    <div class="signal-meta-info">
+                      <span class="signal-time">{{ formatSignalTime(sig.createdAt) }}</span>
+                      <span class="signal-copies">📋 {{ sig.copied }}</span>
+                    </div>
+                  </div>
                   <div class="signal-sub">{{ sig.metric }}</div>
                   <div class="signal-confidence">
                     <div class="confidence-bar">
@@ -553,13 +586,21 @@
                   </div>
                 </div>
                 <div class="signal-actions">
-                  <button :class="['pill', 'signal-btn', sig.action === 'CALL' ? 'pill-green' : 'pill-red']" @click.stop="handleSignalTrade(sig)">
+                  <div v-if="getSignalValidity(sig).isValid" class="validity-timer">
+                    <svg width="36" height="36" viewBox="0 0 36 36" style="transform: rotate(-90deg)">
+                      <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
+                      <circle cx="18" cy="18" r="16" fill="none" :stroke="sig.action === 'CALL' ? '#5df7c2' : '#ff7b7b'" stroke-width="2" 
+                        :style="{ strokeDasharray: `${getSignalValidity(sig).percent * 1.005} 100`, transition: 'stroke-dasharray 0.3s' }"/>
+                    </svg>
+                    <span class="timer-text">{{ Math.ceil(getSignalValidity(sig).remaining / 1000) }}s</span>
+                  </div>
+                  <span v-else class="pill pill-soft" style="opacity: 0.5">已过期</span>
+                  <button :class="['pill', 'signal-btn', sig.action === 'CALL' ? 'pill-green' : 'pill-red']" @click.stop="handleSignalTrade(sig)" :disabled="!getSignalValidity(sig).isValid">
                     {{ sig.action }}
                   </button>
                   <button class="pill pill-soft signal-detail-btn" @click.stop="showSignalDetail = true; selectedSignal = sig" title="查看详情">
                     ℹ
                   </button>
-                  <span class="pill pill-soft">{{ sig.timing }}</span>
                 </div>
               </div>
               <div v-if="filteredSignals.length === 0" class="signal-empty">
@@ -819,6 +860,7 @@ const showSignalDetail = ref(false);
 const selectedSignal = ref(null);
 const signalSortBy = ref('confidence'); // 'confidence' | 'timing' | 'new'
 const signalFilterAction = ref('all'); // 'all' | 'CALL' | 'PUT'
+const signalFilterTiming = ref('all'); // 'all' | '1m' | '2m' | '3m' | '4m' | '5m'
 const chartType = ref('line'); // line | area | candle
 const timeframe = ref(5); // seconds per bar
 const showSMA = ref(false);
@@ -838,9 +880,9 @@ const rightDockItems = [
 ];
 
 const signalFeed = ref([
-  { title: 'EUR/USD 突破', metric: '动量 +1.2σ', confidence: 0.82, action: 'CALL', timing: '5m', symbol: 'EURUSD', amount: 50, duration: 300 },
-  { title: 'BTC/USDT 回踩', metric: 'RSI 34 · 趋势向上', confidence: 0.74, action: 'CALL', timing: '3m', symbol: 'BTCUSDT', amount: 100, duration: 180 },
-  { title: 'XAU/USD 拐点', metric: '布林中轨反弹', confidence: 0.68, action: 'PUT', timing: '1m', symbol: 'XAUUSD', amount: 25, duration: 60 },
+  { title: 'EUR/USD 突破', metric: '动量 +1.2σ', confidence: 0.82, action: 'CALL', timing: '5m', symbol: 'EURUSD', amount: 50, duration: 300, copied: 1240, createdAt: Date.now() - 180000, validity: 600000 },
+  { title: 'BTC/USDT 回踩', metric: 'RSI 34 · 趋势向上', confidence: 0.74, action: 'CALL', timing: '3m', symbol: 'BTCUSDT', amount: 100, duration: 180, copied: 856, createdAt: Date.now() - 120000, validity: 180000 },
+  { title: 'XAU/USD 拐点', metric: '布林中轨反弹', confidence: 0.68, action: 'PUT', timing: '1m', symbol: 'XAUUSD', amount: 25, duration: 60, copied: 543, createdAt: Date.now() - 60000, validity: 60000 },
 ]);
 
 const socialLeaders = ref([
@@ -1059,6 +1101,29 @@ const selectedSymbol = computed({
   get: () => marketStore.selectedSymbol,
   set: (val) => marketStore.setSymbol(val),
 });
+
+const currentTime = ref(Date.now()); // 用于计算相对时间
+
+// 格式化信号生成时间（相对值）
+const formatSignalTime = (createdAt) => {
+  const diff = currentTime.value - createdAt;
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes}分钟前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}小时前`;
+  const days = Math.floor(hours / 24);
+  return `${days}天前`;
+};
+
+// 计算信号有效性和倒计时
+const getSignalValidity = (signal) => {
+  const elapsed = currentTime.value - signal.createdAt;
+  const remaining = signal.validity - elapsed;
+  if (remaining <= 0) return { isValid: false, remaining: 0, percent: 0 };
+  const percent = Math.max(0, (remaining / signal.validity) * 100);
+  return { isValid: true, remaining, percent };
+};
 
 // Market Stats Calculations
 const marketStats = computed(() => {
@@ -1644,6 +1709,7 @@ onMounted(async () => {
     marketStore.fetchActiveOrders();
     marketStore.fetchBalance();
     updateCandleCountdown();
+    currentTime.value = Date.now(); // 更新当前时间用于倒计时
   }, 1000);
 
   historyInterval = setInterval(() => {
@@ -1791,13 +1857,13 @@ const handleSignalTrade = async (signal) => {
 const pushNewSignal = () => {
   // 新信号数据池
   const signalPool = [
-    { title: 'GBP/USD 上破', metric: 'RSI 65 · 突破阻力', confidence: 0.79, action: 'CALL', timing: '2m', symbol: 'GBPUSD', amount: 40, duration: 120 },
-    { title: 'ETH/USDT 下行', metric: '布林下轨测试', confidence: 0.75, action: 'PUT', timing: '3m', symbol: 'ETHUSDT', amount: 75, duration: 180 },
-    { title: 'Gold 反弹', metric: '动量 +0.8σ', confidence: 0.71, action: 'CALL', timing: '5m', symbol: 'XAUUSD', amount: 30, duration: 300 },
-    { title: 'US100 均线黄金交叉', metric: 'MA20 穿 MA50', confidence: 0.86, action: 'CALL', timing: '4m', symbol: 'US100', amount: 60, duration: 240 },
-    { title: 'Oil 下跌', metric: 'MACD 负值扩大', confidence: 0.73, action: 'PUT', timing: '2m', symbol: 'WTIUSD', amount: 45, duration: 120 },
-    { title: 'USDJPY 震荡', metric: 'RSI 50 · 中性信号', confidence: 0.68, action: 'CALL', timing: '1m', symbol: 'USDJPY', amount: 20, duration: 60 },
-    { title: 'S&P500 新高', metric: 'ADX 强势向上', confidence: 0.81, action: 'CALL', timing: '5m', symbol: 'US500', amount: 80, duration: 300 },
+    { title: 'GBP/USD 上破', metric: 'RSI 65 · 突破阻力', confidence: 0.79, action: 'CALL', timing: '2m', symbol: 'GBPUSD', amount: 40, duration: 120, copied: 0, createdAt: Date.now(), validity: 120000 },
+    { title: 'ETH/USDT 下行', metric: '布林下轨测试', confidence: 0.75, action: 'PUT', timing: '3m', symbol: 'ETHUSDT', amount: 75, duration: 180, copied: 0, createdAt: Date.now(), validity: 180000 },
+    { title: 'Gold 反弹', metric: '动量 +0.8σ', confidence: 0.71, action: 'CALL', timing: '5m', symbol: 'XAUUSD', amount: 30, duration: 300, copied: 0, createdAt: Date.now(), validity: 300000 },
+    { title: 'US100 均线黄金交叉', metric: 'MA20 穿 MA50', confidence: 0.86, action: 'CALL', timing: '4m', symbol: 'US100', amount: 60, duration: 240, copied: 0, createdAt: Date.now(), validity: 240000 },
+    { title: 'Oil 下跌', metric: 'MACD 负值扩大', confidence: 0.73, action: 'PUT', timing: '2m', symbol: 'WTIUSD', amount: 45, duration: 120, copied: 0, createdAt: Date.now(), validity: 120000 },
+    { title: 'USDJPY 震荡', metric: 'RSI 50 · 中性信号', confidence: 0.68, action: 'CALL', timing: '1m', symbol: 'USDJPY', amount: 20, duration: 60, copied: 0, createdAt: Date.now(), validity: 60000 },
+    { title: 'S&P500 新高', metric: 'ADX 强势向上', confidence: 0.81, action: 'CALL', timing: '5m', symbol: 'US500', amount: 80, duration: 300, copied: 0, createdAt: Date.now(), validity: 300000 },
   ];
 
   // 随机选择一个新信号
@@ -2384,14 +2450,14 @@ const pushNewSignal = () => {
 
 .toolbar-actions {
   pointer-events: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
   background: rgba(12, 16, 27, 0.8);
   backdrop-filter: blur(12px);
   padding: 4px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  display: flex;
-  gap: 4px;
-  align-items: center;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
@@ -2411,8 +2477,68 @@ const pushNewSignal = () => {
   box-sizing: border-box;
 }
 
-.toolbar-actions {
+.quick-symbols {
+  pointer-events: auto;
+  display: flex;
+  gap: 4px;
   align-items: center;
+  background: rgba(12, 16, 27, 0.8);
+  backdrop-filter: blur(12px);
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  height: 42px;
+  box-sizing: border-box;
+  overflow-x: auto;
+}
+
+.quick-symbol-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #8fa1c4;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  min-width: 32px;
+  justify-content: center;
+}
+
+.quick-symbol-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(93, 247, 194, 0.3);
+  color: #fff;
+}
+
+.quick-symbol-btn.active {
+  background: rgba(93, 247, 194, 0.2);
+  color: #5df7c2;
+  border-color: rgba(93, 247, 194, 0.5);
+}
+
+.symbol-code {
+  font-weight: 700;
+  font-size: 10px;
+}
+
+.arrow {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.arrow-up {
+  color: #5df7c2;
+}
+
+.arrow-down {
+  color: #ff7b7b;
 }
 
 .symbol-select-wrapper {
@@ -3231,6 +3357,16 @@ const pushNewSignal = () => {
   border-color: rgba(93, 247, 194, 0.4);
 }
 
+.signal-row.signal-expired {
+  opacity: 0.6;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.signal-row.signal-expired .signal-btn {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 @keyframes signalPulse {
   0% {
     transform: translateX(-20px);
@@ -3353,6 +3489,56 @@ const pushNewSignal = () => {
   padding: 40px 20px;
   color: #6b7a99;
   text-align: center;
+}
+
+/* Signal Row Content */
+.signal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.signal-meta-info {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.signal-time {
+  font-size: 10px;
+  color: #6b7a99;
+  white-space: nowrap;
+}
+
+.signal-copies {
+  font-size: 10px;
+  color: #8fa1c4;
+  white-space: nowrap;
+}
+
+/* Validity Timer */
+.validity-timer {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.validity-timer svg {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+}
+
+.timer-text {
+  position: relative;
+  z-index: 1;
+  font-size: 9px;
+  font-weight: 700;
+  color: #5df7c2;
 }
 
 .signal-meta,
