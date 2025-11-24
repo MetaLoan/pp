@@ -589,9 +589,6 @@
                     <button :class="['pill', 'signal-btn', sig.action === 'CALL' ? 'pill-green' : 'pill-red']" @click.stop="handleSignalTrade(sig)" :disabled="!getSignalValidity(sig).isValid">
                       {{ sig.action }}
                     </button>
-                    <button class="pill pill-soft signal-copy-btn" @click.stop="handleCopySignal(sig)" title="复制信号">
-                      📋
-                    </button>
                     <button class="pill pill-soft signal-detail-btn" @click.stop="showSignalDetail = true; selectedSignal = sig" title="查看详情">
                       ℹ
                     </button>
@@ -1963,6 +1960,9 @@ const handleSignalTrade = async (signal) => {
     // 执行下单（使用计算出的orderDuration）
     await marketStore.placeOrder(signal.symbol, signal.action, signal.amount, orderDuration);
     
+    // 递增 copied 计数（跟随 = 复制）
+    signal.copied += 1;
+    
     // 刷新数据
     marketStore.fetchActiveOrders();
     marketStore.fetchBalance();
@@ -1980,36 +1980,6 @@ const handleSignalTrade = async (signal) => {
   }
 };
 
-// 复制信号
-const handleCopySignal = (signal) => {
-  // 检查信号是否已过期
-  const now = Date.now();
-  if (now >= signal.expiryTime) {
-    errorMsg.value = `⚠ 信号已过期，无法复制`;
-    setTimeout(() => { errorMsg.value = ''; }, 3000);
-    return;
-  }
-  
-  // 计算剩余有效期
-  const remainingTime = signal.expiryTime - now;
-  const remainingSeconds = Math.ceil(remainingTime / 1000);
-  
-  // 检查是否在过期前5秒内（不允许复制交割）
-  if (remainingSeconds <= 5) {
-    errorMsg.value = `⚠ 信号即将过期（${remainingSeconds}s），不允许复制`;
-    setTimeout(() => { errorMsg.value = ''; }, 3000);
-    return;
-  }
-  
-  // 递增 copied 计数
-  signal.copied += 1;
-  
-  // 显示反馈
-  errorMsg.value = `✓ 已复制信号: ${signal.title}（剩余 ${remainingSeconds}s）`;
-  setTimeout(() => {
-    errorMsg.value = '';
-  }, 2000);
-};
 
 const pushNewSignal = () => {
   // 新信号数据池
@@ -3533,15 +3503,6 @@ const pushNewSignal = () => {
   letter-spacing: 1px;
 }
 
-/* Signal Copy Button */
-.signal-copy-btn {
-  cursor: pointer;
-}
-
-.signal-copy-btn:hover {
-  background: rgba(93, 247, 194, 0.2) !important;
-  border-color: rgba(93, 247, 194, 0.4) !important;
-}
 
 /* Signal Tabs (keep for backwards compatibility if needed) */
 .signal-tabs {
