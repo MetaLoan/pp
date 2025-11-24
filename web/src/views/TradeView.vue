@@ -564,21 +564,12 @@
               <div class="signal-list">
                 <!-- Signal Table Header -->
                 <div class="signal-header-row">
-                  <div class="signal-cell symbol-cell">
-                    <span class="header-label">交易标的</span>
-                  </div>
-                  <div class="signal-cell trend-cell">
-                    <span class="header-label">趋势</span>
-                  </div>
-                  <div class="signal-cell action-cell">
-                    <span class="header-label">操作</span>
-                  </div>
-                  <div class="signal-cell expiry-cell">
-                    <span class="header-label">到期</span>
-                  </div>
-                  <div class="signal-cell time-cell">
-                    <span class="header-label">产生时间</span>
-                  </div>
+                  <div class="signal-cell symbol-cell"></div>
+                  <div class="signal-cell trend-cell"></div>
+                  <div class="signal-cell copies-cell"></div>
+                  <div class="signal-cell expiry-cell"></div>
+                  <div class="signal-cell time-cell"></div>
+                  <div class="signal-cell action-cell"></div>
                 </div>
 
                 <!-- Signal Rows -->
@@ -591,27 +582,17 @@
                   <!-- 趋势强度 -->
                   <div class="signal-cell trend-cell">
                     <div :class="['trend-indicator', { up: sig.confidence >= 0.5, down: sig.confidence < 0.5 }]">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                         <polyline v-if="sig.confidence >= 0.5" points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
                         <polyline v-else points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline>
                       </svg>
-                      <span class="trend-text">{{ sig.confidence >= 0.5 ? '强' : '弱' }}</span>
+                      <span class="trend-arrows">{{ sig.confidence >= 0.8 ? '↑↑↑' : sig.confidence >= 0.5 ? '↑↑' : sig.confidence >= 0.3 ? '↓' : '↓↓' }}</span>
                     </div>
                   </div>
 
-                  <!-- 跟随按钮 -->
-                  <div class="signal-cell action-cell">
-                    <button 
-                      v-if="getSignalValidity(sig).isValid"
-                      :class="['btn-follow', sig.action === 'CALL' ? 'btn-call' : 'btn-put']" 
-                      @click="handleSignalTrade(sig)"
-                      :title="`跟随 ${sig.action} 信号`">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"></path>
-                      </svg>
-                      跟随 {{ sig.action }}
-                    </button>
-                    <span v-else class="btn-expired">已过期</span>
+                  <!-- 已复制数量 -->
+                  <div class="signal-cell copies-cell">
+                    <span class="copies-badge">{{ sig.copied }}</span>
                   </div>
 
                   <!-- 到期时间 -->
@@ -629,6 +610,18 @@
                   <!-- 产生时间（相对时间） -->
                   <div class="signal-cell time-cell">
                     <span class="time-text">{{ formatSignalTime(sig.createdAt) }}</span>
+                  </div>
+
+                  <!-- 跟随按钮 (放在最后) -->
+                  <div class="signal-cell action-cell">
+                    <button 
+                      v-if="getSignalValidity(sig).isValid"
+                      :class="['btn-follow', sig.action === 'CALL' ? 'btn-call' : 'btn-put']" 
+                      @click="handleSignalTrade(sig)"
+                      :title="`跟随 ${sig.action} 信号`">
+                      {{ sig.action }}
+                    </button>
+                    <span v-else class="btn-expired">已过期</span>
                   </div>
                 </div>
                 <div v-if="filteredSignals.length === 0" class="signal-empty">
@@ -3600,13 +3593,13 @@ const pushNewSignal = () => {
 .pending-row,
 .social-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr;
+  grid-template-columns: 1.2fr 1.2fr 1fr 1fr 1.3fr 1.3fr;
   align-items: center;
   justify-content: space-between;
   background: rgba(255, 255, 255, 0.01);
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   padding: 12px 16px;
-  gap: 16px;
+  gap: 12px;
   transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: default;
 }
@@ -3679,35 +3672,56 @@ const pushNewSignal = () => {
   flex-shrink: 0;
 }
 
-.trend-text {
-  font-weight: 600;
+.trend-arrows {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0px;
+}
+
+/* Copies Cell */
+.copies-cell {
+  justify-content: center;
+}
+
+.copies-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: rgba(93, 247, 194, 0.1);
+  color: #8fa1c4;
   font-size: 12px;
+  font-weight: 600;
+  border: 1px solid rgba(93, 247, 194, 0.2);
 }
 
 /* Action Cell */
 .action-cell {
-  justify-content: center;
+  justify-content: flex-end;
 }
 
 .btn-follow {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid currentColor;
+  justify-content: center;
+  padding: 6px 14px;
+  border: none;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.03);
+  background: transparent;
   color: #fff;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 1.5px solid currentColor;
 }
 
 .btn-follow:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .btn-follow:active:not(:disabled) {
@@ -3721,26 +3735,20 @@ const pushNewSignal = () => {
 
 .btn-follow.btn-call {
   color: #5df7c2;
-  border-color: rgba(93, 247, 194, 0.5);
-  background: rgba(93, 247, 194, 0.05);
+  border-color: #5df7c2;
 }
 
 .btn-follow.btn-call:hover:not(:disabled) {
-  background: rgba(93, 247, 194, 0.1);
-  border-color: rgba(93, 247, 194, 0.8);
-  box-shadow: 0 2px 12px rgba(93, 247, 194, 0.2);
+  background: rgba(93, 247, 194, 0.15);
 }
 
 .btn-follow.btn-put {
   color: #ff7b7b;
-  border-color: rgba(255, 123, 123, 0.5);
-  background: rgba(255, 123, 123, 0.05);
+  border-color: #ff7b7b;
 }
 
 .btn-follow.btn-put:hover:not(:disabled) {
-  background: rgba(255, 123, 123, 0.1);
-  border-color: rgba(255, 123, 123, 0.8);
-  box-shadow: 0 2px 12px rgba(255, 123, 123, 0.2);
+  background: rgba(255, 123, 123, 0.15);
 }
 
 .btn-expired {
@@ -3812,10 +3820,10 @@ const pushNewSignal = () => {
 /* Signal Table Header */
 .signal-header-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr;
+  grid-template-columns: 1.2fr 1.2fr 1fr 1fr 1.3fr 1.3fr;
   align-items: center;
   padding: 12px 16px;
-  gap: 16px;
+  gap: 12px;
   background: linear-gradient(90deg, rgba(93, 247, 194, 0.08), rgba(93, 247, 194, 0.03));
   border-bottom: 1px solid rgba(93, 247, 194, 0.15);
   font-size: 12px;
