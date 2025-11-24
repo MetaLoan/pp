@@ -911,9 +911,9 @@ const rightDockItems = [
 ];
 
 const signalFeed = ref([
-  { title: 'EUR/USD 突破', metric: '动量 +1.2σ', confidence: 0.82, action: 'CALL', timing: '5m', symbol: 'EURUSD', amount: 50, duration: 300, copied: 1240, createdAt: Date.now() - 180000, validity: 600000 },
-  { title: 'BTC/USDT 回踩', metric: 'RSI 34 · 趋势向上', confidence: 0.74, action: 'CALL', timing: '3m', symbol: 'BTCUSDT', amount: 100, duration: 180, copied: 856, createdAt: Date.now() - 120000, validity: 180000 },
-  { title: 'XAU/USD 拐点', metric: '布林中轨反弹', confidence: 0.68, action: 'PUT', timing: '1m', symbol: 'XAUUSD', amount: 25, duration: 60, copied: 543, createdAt: Date.now() - 60000, validity: 60000 },
+  { title: 'EUR/USD 突破', metric: '动量 +1.2σ', confidence: 0.82, action: 'CALL', timing: '5m', symbol: 'EURUSD', amount: 50, duration: 300, copied: 1240, createdAt: Date.now() - 180000, validity: 600000, expiryTime: Date.now() - 180000 + 600000 },
+  { title: 'BTC/USDT 回踩', metric: 'RSI 34 · 趋势向上', confidence: 0.74, action: 'CALL', timing: '3m', symbol: 'BTCUSDT', amount: 100, duration: 180, copied: 856, createdAt: Date.now() - 120000, validity: 180000, expiryTime: Date.now() - 120000 + 180000 },
+  { title: 'XAU/USD 拐点', metric: '布林中轨反弹', confidence: 0.68, action: 'PUT', timing: '1m', symbol: 'XAUUSD', amount: 25, duration: 60, copied: 543, createdAt: Date.now() - 60000, validity: 60000, expiryTime: Date.now() - 60000 + 60000 },
 ]);
 
 // Signal module tabs
@@ -1869,6 +1869,12 @@ const restartCandleInterval = () => {
 const handleTrade = async (direction) => {
   errorMsg.value = '';
   try {
+    // 检查 duration 是否最少 5 秒
+    if (duration.value < 5) {
+      errorMsg.value = `⚠ 订单时长过短（${duration.value}s），最少需要5秒`;
+      return;
+    }
+    
     await marketStore.placeOrder(selectedSymbol.value, direction, amount.value, duration.value);
     marketStore.fetchActiveOrders();
     marketStore.fetchBalance();
@@ -1929,6 +1935,29 @@ const handleOutsideClick = (e) => {
 const handleSignalTrade = async (signal) => {
   errorMsg.value = '';
   try {
+    // 检查信号是否已过期
+    const now = Date.now();
+    if (now >= signal.expiryTime) {
+      errorMsg.value = `⚠ 信号已过期，无法执行交易`;
+      return;
+    }
+    
+    // 计算剩余有效期
+    const remainingTime = signal.expiryTime - now;
+    const remainingSeconds = Math.ceil(remainingTime / 1000);
+    
+    // 检查交割时间是否 >= 5秒（过期前5秒不允许跟随）
+    if (remainingSeconds < 5) {
+      errorMsg.value = `⚠ 信号即将过期（${remainingSeconds}s），不允许执行（需至少5秒有效期）`;
+      return;
+    }
+    
+    // 检查 duration 是否最少 5 秒
+    if (signal.duration < 5) {
+      errorMsg.value = `⚠ 订单时长过短（${signal.duration}s），最少需要5秒`;
+      return;
+    }
+    
     // 更新交易参数
     amount.value = signal.amount;
     duration.value = signal.duration;
@@ -1956,11 +1985,30 @@ const handleSignalTrade = async (signal) => {
 
 // 复制信号
 const handleCopySignal = (signal) => {
+  // 检查信号是否已过期
+  const now = Date.now();
+  if (now >= signal.expiryTime) {
+    errorMsg.value = `⚠ 信号已过期，无法复制`;
+    setTimeout(() => { errorMsg.value = ''; }, 3000);
+    return;
+  }
+  
+  // 计算剩余有效期
+  const remainingTime = signal.expiryTime - now;
+  const remainingSeconds = Math.ceil(remainingTime / 1000);
+  
+  // 检查是否在过期前5秒内（不允许复制交割）
+  if (remainingSeconds <= 5) {
+    errorMsg.value = `⚠ 信号即将过期（${remainingSeconds}s），不允许复制`;
+    setTimeout(() => { errorMsg.value = ''; }, 3000);
+    return;
+  }
+  
   // 递增 copied 计数
   signal.copied += 1;
   
   // 显示反馈
-  errorMsg.value = `✓ 已复制信号: ${signal.title}`;
+  errorMsg.value = `✓ 已复制信号: ${signal.title}（剩余 ${remainingSeconds}s）`;
   setTimeout(() => {
     errorMsg.value = '';
   }, 2000);
@@ -1968,14 +2016,15 @@ const handleCopySignal = (signal) => {
 
 const pushNewSignal = () => {
   // 新信号数据池
+  const now = Date.now();
   const signalPool = [
-    { title: 'GBP/USD 上破', metric: 'RSI 65 · 突破阻力', confidence: 0.79, action: 'CALL', timing: '2m', symbol: 'GBPUSD', amount: 40, duration: 120, copied: 0, createdAt: Date.now(), validity: 120000 },
-    { title: 'ETH/USDT 下行', metric: '布林下轨测试', confidence: 0.75, action: 'PUT', timing: '3m', symbol: 'ETHUSDT', amount: 75, duration: 180, copied: 0, createdAt: Date.now(), validity: 180000 },
-    { title: 'Gold 反弹', metric: '动量 +0.8σ', confidence: 0.71, action: 'CALL', timing: '5m', symbol: 'XAUUSD', amount: 30, duration: 300, copied: 0, createdAt: Date.now(), validity: 300000 },
-    { title: 'US100 均线黄金交叉', metric: 'MA20 穿 MA50', confidence: 0.86, action: 'CALL', timing: '4m', symbol: 'US100', amount: 60, duration: 240, copied: 0, createdAt: Date.now(), validity: 240000 },
-    { title: 'Oil 下跌', metric: 'MACD 负值扩大', confidence: 0.73, action: 'PUT', timing: '2m', symbol: 'WTIUSD', amount: 45, duration: 120, copied: 0, createdAt: Date.now(), validity: 120000 },
-    { title: 'USDJPY 震荡', metric: 'RSI 50 · 中性信号', confidence: 0.68, action: 'CALL', timing: '1m', symbol: 'USDJPY', amount: 20, duration: 60, copied: 0, createdAt: Date.now(), validity: 60000 },
-    { title: 'S&P500 新高', metric: 'ADX 强势向上', confidence: 0.81, action: 'CALL', timing: '5m', symbol: 'US500', amount: 80, duration: 300, copied: 0, createdAt: Date.now(), validity: 300000 },
+    { title: 'GBP/USD 上破', metric: 'RSI 65 · 突破阻力', confidence: 0.79, action: 'CALL', timing: '2m', symbol: 'GBPUSD', amount: 40, duration: 120, copied: 0, createdAt: now, validity: 120000, expiryTime: now + 120000 },
+    { title: 'ETH/USDT 下行', metric: '布林下轨测试', confidence: 0.75, action: 'PUT', timing: '3m', symbol: 'ETHUSDT', amount: 75, duration: 180, copied: 0, createdAt: now, validity: 180000, expiryTime: now + 180000 },
+    { title: 'Gold 反弹', metric: '动量 +0.8σ', confidence: 0.71, action: 'CALL', timing: '5m', symbol: 'XAUUSD', amount: 30, duration: 300, copied: 0, createdAt: now, validity: 300000, expiryTime: now + 300000 },
+    { title: 'US100 均线黄金交叉', metric: 'MA20 穿 MA50', confidence: 0.86, action: 'CALL', timing: '4m', symbol: 'US100', amount: 60, duration: 240, copied: 0, createdAt: now, validity: 240000, expiryTime: now + 240000 },
+    { title: 'Oil 下跌', metric: 'MACD 负值扩大', confidence: 0.73, action: 'PUT', timing: '2m', symbol: 'WTIUSD', amount: 45, duration: 120, copied: 0, createdAt: now, validity: 120000, expiryTime: now + 120000 },
+    { title: 'USDJPY 震荡', metric: 'RSI 50 · 中性信号', confidence: 0.68, action: 'CALL', timing: '1m', symbol: 'USDJPY', amount: 20, duration: 60, copied: 0, createdAt: now, validity: 60000, expiryTime: now + 60000 },
+    { title: 'S&P500 新高', metric: 'ADX 强势向上', confidence: 0.81, action: 'CALL', timing: '5m', symbol: 'US500', amount: 80, duration: 300, copied: 0, createdAt: now, validity: 300000, expiryTime: now + 300000 },
   ];
 
   // 随机选择一个新信号
