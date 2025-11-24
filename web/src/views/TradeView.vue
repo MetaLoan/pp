@@ -150,12 +150,6 @@
           </div>
 
           <div class="chart-wrapper">
-            <div class="chart-overlay top">
-              <div class="toolbar-blur">
-                <button class="ghost" @click="startDrawing"><Plus :size="14" /> Line</button>
-                <button class="ghost" @click="clearDrawings"><Eraser :size="14" /> Clear</button>
-              </div>
-            </div>
             <div class="chart-surface" ref="chartContainer"></div>
             <div class="chart-overlay bottom">
               <div class="market-stats">
@@ -317,6 +311,18 @@
 
               <!-- Drawing Tools Content -->
               <div v-if="activeMenu === 'drawing'" class="drawing-menu-content">
+                <div class="drawing-actions">
+                  <button class="action-btn primary" @click="startDrawing('trend')">
+                    <Plus :size="16" />
+                    <span>Start Drawing</span>
+                  </button>
+                  <button class="action-btn secondary" @click="clearDrawings">
+                    <Eraser :size="16" />
+                    <span>Clear All</span>
+                  </button>
+                </div>
+                <div class="menu-divider"></div>
+                <div class="menu-label">Drawing Tools</div>
                 <div class="tools-grid">
                   <button 
                     v-for="tool in drawingTools" 
@@ -1834,6 +1840,8 @@ const handleOutsideClick = (e) => {
   z-index: 1000;
   width: auto;
   max-width: calc(100vw - 48px);
+  overflow: visible;
+  filter: drop-shadow(0 8px 32px rgba(0, 0, 0, 0.6));
 }
 
 .ticket-content {
@@ -1842,7 +1850,7 @@ const handleOutsideClick = (e) => {
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 24px;
   padding: 16px 24px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  box-shadow: none;
   backdrop-filter: blur(40px);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: visible;
@@ -1850,7 +1858,6 @@ const handleOutsideClick = (e) => {
 
 .ticket-content:hover {
   background: rgba(18, 20, 28, 0.9);
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
   transform: translateY(-2px);
 }
 
@@ -1862,6 +1869,9 @@ const handleOutsideClick = (e) => {
   overflow-x: auto;
   overflow-y: visible;
   scrollbar-width: none;
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 0 0 transparent);
 }
 
 .dock-layout::-webkit-scrollbar {
@@ -2062,30 +2072,31 @@ const handleOutsideClick = (e) => {
   padding: 0;
   min-width: 0;
   box-sizing: border-box;
+  position: relative;
 }
 
 .ticket-actions .btn-call {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: #ffffff;
-  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+  box-shadow: inset 0 0 12px rgba(16, 185, 129, 0.3);
 }
 
 .ticket-actions .btn-call:hover:not(:disabled) {
   background: linear-gradient(135deg, #059669 0%, #047857 100%);
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 6px 24px rgba(16, 185, 129, 0.5);
+  transform: translateY(-2px);
+  box-shadow: inset 0 0 20px rgba(16, 185, 129, 0.5), inset 0 0 8px rgba(255, 255, 255, 0.2);
 }
 
 .ticket-actions .btn-put {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: #ffffff;
-  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
+  box-shadow: inset 0 0 12px rgba(239, 68, 68, 0.3);
 }
 
 .ticket-actions .btn-put:hover:not(:disabled) {
   background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 6px 24px rgba(239, 68, 68, 0.5);
+  transform: translateY(-2px);
+  box-shadow: inset 0 0 20px rgba(239, 68, 68, 0.5), inset 0 0 8px rgba(255, 255, 255, 0.2);
 }
 
 .ticket-actions .btn-call:disabled,
@@ -2132,7 +2143,7 @@ const handleOutsideClick = (e) => {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  align-items: flex-start;
+  align-items: center;
   pointer-events: none;
 }
 
@@ -2154,13 +2165,15 @@ const handleOutsideClick = (e) => {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   background: rgba(12, 16, 27, 0.8);
   backdrop-filter: blur(12px);
-  padding: 8px 12px;
+  padding: 4px 8px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  height: 42px;
+  box-sizing: border-box;
 }
 
 .toolbar-actions {
@@ -2374,14 +2387,15 @@ const handleOutsideClick = (e) => {
 }
 
 .price-ticker {
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 700;
-  padding: 6px 12px;
+  padding: 0 8px;
   border-radius: 10px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-variant-numeric: tabular-nums;
+  height: 100%;
 }
 
 .price-ticker.up {
@@ -2538,7 +2552,7 @@ const handleOutsideClick = (e) => {
   z-index: 10;
 }
 .chart-overlay.top {
-  top: 0;
+  top: 50px;
   justify-content: flex-start;
 }
 .chart-overlay.bottom {
@@ -2550,20 +2564,47 @@ const handleOutsideClick = (e) => {
   pointer-events: all;
   display: flex;
   gap: 8px;
-  padding: 8px 10px;
-  background: rgba(12, 16, 27, 0.7);
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(10px);
+  padding: 8px 12px;
+  background: rgba(12, 16, 27, 0.9);
+  border-radius: 12px;
+  border: 1px solid rgba(93, 247, 194, 0.2);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(93, 247, 194, 0.1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toolbar-blur:hover {
+  background: rgba(12, 16, 27, 0.95);
+  border-color: rgba(93, 247, 194, 0.4);
+  box-shadow: 0 12px 32px rgba(93, 247, 194, 0.15), 0 0 0 1px rgba(93, 247, 194, 0.2);
 }
 
 .ghost {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #dbe3f5;
-  padding: 6px 10px;
-  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(93, 247, 194, 0.08), rgba(61, 255, 181, 0.04));
+  border: 1px solid rgba(93, 247, 194, 0.25);
+  color: #5df7c2;
+  padding: 8px 14px;
+  border-radius: 10px;
   cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ghost:hover {
+  background: linear-gradient(135deg, rgba(93, 247, 194, 0.15), rgba(61, 255, 181, 0.1));
+  border-color: rgba(93, 247, 194, 0.5);
+  box-shadow: 0 0 16px rgba(93, 247, 194, 0.3);
+  transform: translateY(-1px);
+}
+
+.ghost:active {
+  transform: translateY(0);
 }
 
 .legend {
@@ -2797,11 +2838,27 @@ const handleOutsideClick = (e) => {
     padding-right: calc(var(--dock-width) + var(--dock-offset) + 2px);
     box-sizing: border-box;
   }
-  .chart-pane {
-    margin-right: calc(var(--dock-width) + var(--dock-offset) + 2px);
+}
+
+@media (max-width: 1024px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    gap: 24px;
   }
-  .side-pane {
-    margin-right: calc(var(--dock-width) + var(--dock-offset) + 2px);
+}
+
+@media (max-width: 768px) {
+  .chart-glass {
+    min-height: 350px;
+  }
+  
+  .trade-ticket-floating {
+    bottom: 12px;
+    max-width: calc(100vw - 24px);
+  }
+  
+  .ticket-content {
+    padding: 12px 16px;
   }
 }
 
@@ -3629,6 +3686,62 @@ const handleOutsideClick = (e) => {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
+}
+
+.drawing-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.action-btn.primary {
+  background: linear-gradient(135deg, #5df7c2 0%, #3dffb5 100%);
+  color: #0a0e14;
+  box-shadow: 0 4px 12px rgba(93, 247, 194, 0.3);
+}
+
+.action-btn.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(93, 247, 194, 0.4);
+}
+
+.action-btn.secondary {
+  background: linear-gradient(135deg, rgba(93, 247, 194, 0.15), rgba(61, 255, 181, 0.08));
+  border: 1px solid rgba(93, 247, 194, 0.3);
+  color: #5df7c2;
+}
+
+.action-btn.secondary:hover {
+  background: linear-gradient(135deg, rgba(93, 247, 194, 0.25), rgba(61, 255, 181, 0.15));
+  border-color: rgba(93, 247, 194, 0.5);
+  box-shadow: 0 0 12px rgba(93, 247, 194, 0.2);
+}
+
+.menu-divider {
+  height: 1px;
+  background: linear-gradient(to right,
+    rgba(255, 255, 255, 0),
+    rgba(93, 247, 194, 0.2),
+    rgba(255, 255, 255, 0)
+  );
+  margin: 16px 0;
 }
 
 .tool-grid-item {
