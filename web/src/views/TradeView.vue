@@ -511,17 +511,15 @@
           <div v-else-if="activeRightModule === 'signals'" class="card signal-card">
             <div class="card-head">
               <span><Antenna :size="14" /> 交易信号</span>
-              <span class="badge accent">实时脉冲</span>
-            </div>
-            
-            <!-- Signal Tabs -->
-            <div class="signal-tabs">
-              <button :class="['signal-tab', { active: activeSignalTab === 'signals' }]" @click="activeSignalTab = 'signals'">
-                <Antenna :size="14" /> 交易信号
-              </button>
-              <button :class="['signal-tab', { active: activeSignalTab === 'markets' }]" @click="activeSignalTab = 'markets'">
-                <Activity :size="14" /> 切换标的
-              </button>
+              <!-- Signal Tabs (moved to header) -->
+              <div class="signal-tabs-header">
+                <button :class="['signal-tab-header-btn', { active: activeSignalTab === 'signals' }]" @click="activeSignalTab = 'signals'">
+                  交易信号
+                </button>
+                <button :class="['signal-tab-header-btn', { active: activeSignalTab === 'markets' }]" @click="activeSignalTab = 'markets'">
+                  切换标的
+                </button>
+              </div>
             </div>
             
             <!-- Tab 1: Trading Signals (current symbol only) -->
@@ -574,11 +572,8 @@
                       </div>
                     </div>
                     <div class="signal-sub">{{ sig.metric }}</div>
-                    <div class="signal-confidence">
-                      <div class="confidence-bar">
-                        <span class="confidence-fill" :style="{ width: Math.round(sig.confidence * 100) + '%' }"></span>
-                      </div>
-                      <span class="confidence-label">{{ Math.round(sig.confidence * 100) }}%</span>
+                    <div class="signal-confidence-arrows">
+                      <span class="confidence-arrows">{{ getConfidenceArrows(sig.confidence) }}</span>
                     </div>
                   </div>
                   <div class="signal-actions">
@@ -593,6 +588,9 @@
                     <span v-else class="pill pill-soft" style="opacity: 0.5">已过期</span>
                     <button :class="['pill', 'signal-btn', sig.action === 'CALL' ? 'pill-green' : 'pill-red']" @click.stop="handleSignalTrade(sig)" :disabled="!getSignalValidity(sig).isValid">
                       {{ sig.action }}
+                    </button>
+                    <button class="pill pill-soft signal-copy-btn" @click.stop="handleCopySignal(sig)" title="复制信号">
+                      📋
                     </button>
                     <button class="pill pill-soft signal-detail-btn" @click.stop="showSignalDetail = true; selectedSignal = sig" title="查看详情">
                       ℹ
@@ -1213,6 +1211,18 @@ const getTrendArrows = (strength, direction) => {
   const arrowCount = strength >= 0.5 ? 2 : 1;
   const arrow = direction > 0 ? '↑' : '↓';
   return arrow.repeat(arrowCount);
+};
+
+// 将信心度转换为箭头数量（1-3个）
+const getConfidenceArrows = (confidence) => {
+  // confidence 范围 0-1
+  // 0-0.33 = 1个箭头
+  // 0.33-0.66 = 2个箭头
+  // 0.66-1 = 3个箭头
+  let arrowCount = 1;
+  if (confidence >= 0.66) arrowCount = 3;
+  else if (confidence >= 0.33) arrowCount = 2;
+  return '●'.repeat(arrowCount); // 使用圆点表示信心度
 };
 
 // Market Stats Calculations
@@ -1942,6 +1952,18 @@ const handleSignalTrade = async (signal) => {
   } catch (error) {
     errorMsg.value = `⚠ 下单失败: ${error.response?.data?.error || error.message || 'Unknown error'}`;
   }
+};
+
+// 复制信号
+const handleCopySignal = (signal) => {
+  // 递增 copied 计数
+  signal.copied += 1;
+  
+  // 显示反馈
+  errorMsg.value = `✓ 已复制信号: ${signal.title}`;
+  setTimeout(() => {
+    errorMsg.value = '';
+  }, 2000);
 };
 
 const pushNewSignal = () => {
@@ -3419,7 +3441,63 @@ const pushNewSignal = () => {
   gap: 10px;
 }
 
-/* Signal Tabs */
+/* Signal Tabs Header (in card-head) */
+.signal-tabs-header {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.signal-tab-header-btn {
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #8fa1c4;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.signal-tab-header-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(93, 247, 194, 0.2);
+  color: #fff;
+}
+
+.signal-tab-header-btn.active {
+  background: rgba(93, 247, 194, 0.15);
+  border-color: rgba(93, 247, 194, 0.4);
+  color: #5df7c2;
+}
+
+/* Signal Confidence Arrows */
+.signal-confidence-arrows {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.confidence-arrows {
+  font-size: 12px;
+  color: #5df7c2;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+/* Signal Copy Button */
+.signal-copy-btn {
+  cursor: pointer;
+}
+
+.signal-copy-btn:hover {
+  background: rgba(93, 247, 194, 0.2) !important;
+  border-color: rgba(93, 247, 194, 0.4) !important;
+}
+
+/* Signal Tabs (keep for backwards compatibility if needed) */
 .signal-tabs {
   display: flex;
   gap: 8px;
