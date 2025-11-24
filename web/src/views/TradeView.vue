@@ -514,7 +514,7 @@
               <span class="badge accent">实时脉冲</span>
             </div>
             <div class="signal-list">
-              <div v-for="sig in signalFeed" :key="sig.title" class="signal-row">
+              <div v-for="sig in signalFeed" :key="sig.title" class="signal-row" @click="handleSignalTrade(sig)">
                 <div class="signal-meta">
                   <div class="signal-title">{{ sig.title }}</div>
                   <div class="signal-sub">{{ sig.metric }}</div>
@@ -526,7 +526,9 @@
                   </div>
                 </div>
                 <div class="signal-actions">
-                  <span :class="['pill', sig.action === 'CALL' ? 'pill-green' : 'pill-red']">{{ sig.action }}</span>
+                  <button :class="['pill', 'signal-btn', sig.action === 'CALL' ? 'pill-green' : 'pill-red']" @click.stop="handleSignalTrade(sig)">
+                    {{ sig.action }}
+                  </button>
                   <span class="pill pill-soft">{{ sig.timing }}</span>
                 </div>
               </div>
@@ -713,9 +715,9 @@ const rightDockItems = [
 ];
 
 const signalFeed = ref([
-  { title: 'EUR/USD 突破', metric: '动量 +1.2σ', confidence: 0.82, action: 'CALL', timing: '5m' },
-  { title: 'BTC/USDT 回踩', metric: 'RSI 34 · 趋势向上', confidence: 0.74, action: 'CALL', timing: '3m' },
-  { title: 'XAU/USD 拐点', metric: '布林中轨反弹', confidence: 0.68, action: 'PUT', timing: '1m' },
+  { title: 'EUR/USD 突破', metric: '动量 +1.2σ', confidence: 0.82, action: 'CALL', timing: '5m', symbol: 'EURUSD', amount: 50, duration: 300 },
+  { title: 'BTC/USDT 回踩', metric: 'RSI 34 · 趋势向上', confidence: 0.74, action: 'CALL', timing: '3m', symbol: 'BTCUSDT', amount: 100, duration: 180 },
+  { title: 'XAU/USD 拐点', metric: '布林中轨反弹', confidence: 0.68, action: 'PUT', timing: '1m', symbol: 'XAUUSD', amount: 25, duration: 60 },
 ]);
 
 const socialLeaders = ref([
@@ -1591,6 +1593,34 @@ const handleOutsideClick = (e) => {
   // Check if click is on chart-glass or any child that's not the panel
   if (activeMenu.value && !e.target.closest('.floating-side-panel')) {
     activeMenu.value = null;
+  }
+};
+
+const handleSignalTrade = async (signal) => {
+  errorMsg.value = '';
+  try {
+    // 更新交易参数
+    amount.value = signal.amount;
+    duration.value = signal.duration;
+    selectedSymbol.value = signal.symbol;
+    
+    // 执行下单
+    await marketStore.placeOrder(signal.symbol, signal.action, signal.amount, signal.duration);
+    
+    // 刷新数据
+    marketStore.fetchActiveOrders();
+    marketStore.fetchBalance();
+    
+    // 显示成功反馈并切换到订单面板
+    errorMsg.value = `✓ 信号交易执行: ${signal.action} ${signal.title}`;
+    activeRightModule.value = 'orders';
+    
+    // 3秒后清除提示
+    setTimeout(() => {
+      errorMsg.value = '';
+    }, 3000);
+  } catch (error) {
+    errorMsg.value = `⚠ 下单失败: ${error.response?.data?.error || error.message || 'Unknown error'}`;
   }
 };
 </script>
@@ -2979,6 +3009,15 @@ const handleOutsideClick = (e) => {
   border-radius: 12px;
   padding: 12px;
   gap: 10px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.signal-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(93, 247, 194, 0.3);
+  box-shadow: 0 4px 16px rgba(93, 247, 194, 0.1);
+  transform: translateY(-1px);
 }
 
 .signal-meta,
@@ -3065,6 +3104,48 @@ const handleOutsideClick = (e) => {
 .pill-soft {
   background: rgba(255, 255, 255, 0.05);
   color: #8fa1c4;
+}
+
+.signal-btn {
+  background: none;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.signal-btn.pill-green {
+  background: rgba(16, 185, 129, 0.16);
+  color: #5df7c2;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.signal-btn.pill-green:hover {
+  background: rgba(16, 185, 129, 0.28);
+  border-color: rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 12px rgba(93, 247, 194, 0.3);
+  transform: translateY(-1px);
+}
+
+.signal-btn.pill-red {
+  background: rgba(239, 68, 68, 0.16);
+  color: #ff7b7b;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.signal-btn.pill-red:hover {
+  background: rgba(239, 68, 68, 0.28);
+  border-color: rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 12px rgba(255, 123, 123, 0.3);
+  transform: translateY(-1px);
 }
 
 .avatar {
