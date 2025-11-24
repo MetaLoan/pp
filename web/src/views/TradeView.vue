@@ -266,53 +266,62 @@
         <!-- Trade Ticket - Floating Bottom Module -->
         <div class="trade-ticket-floating">
           <div class="ticket-content">
-            <div class="ticket-header">
-              <div class="ticket-title">
-                <Zap :size="18" />
-                <span>Quick Trade</span>
-              </div>
-              <span class="badge accent">Pro</span>
+            <!-- 预估收益角标 -->
+            <div class="return-badge">
+              <span class="return-label">Est. Return</span>
+              <span class="return-value">${{ (amount * (1 + payoutRate)).toFixed(2) }}</span>
             </div>
             
             <div v-if="errorMsg" class="alert">{{ errorMsg }}</div>
             
-            <div class="ticket-inputs">
-              <div class="input-group-compact">
-                <label>Amount</label>
-                <div class="input-wrapper">
-                  <DollarSign :size="14" class="input-icon" />
-                  <input type="number" v-model="amount" min="1" placeholder="10" />
+            <div class="dock-layout">
+              <div class="ticket-inputs">
+                <div class="input-group-compact">
+                  <div class="input-label">
+                    <DollarSign :size="16" class="label-icon" />
+                    <span>Amount</span>
+                  </div>
+                  <div class="input-field">
+                    <input type="number" v-model="amount" min="1" placeholder="10" />
+                    <span class="input-unit">USDT</span>
+                  </div>
+                </div>
+                
+                <div class="dock-divider"></div>
+                
+                <div class="input-group-compact">
+                  <div class="input-label">
+                    <Clock :size="16" class="label-icon" />
+                    <span>Duration</span>
+                  </div>
+                  <div class="input-field">
+                    <select v-model="duration">
+                      <option value="30">30s</option>
+                      <option value="60">60s</option>
+                      <option value="300">5m</option>
+                    </select>
+                  </div>
                 </div>
               </div>
               
-              <div class="input-group-compact">
-                <label>Duration</label>
-                <div class="input-wrapper">
-                  <Clock :size="14" class="input-icon" />
-                  <select v-model="duration">
-                    <option value="30">30s</option>
-                    <option value="60">60s</option>
-                    <option value="300">5m</option>
-                  </select>
-                </div>
+              <div class="dock-divider"></div>
+              
+              <div class="ticket-actions">
+                <button class="btn-call" :disabled="!canTrade" @click="handleTrade('CALL')">
+                  <div class="btn-content">
+                    <ArrowUpRight :size="18" />
+                    <span>CALL</span>
+                  </div>
+                  <span class="payout">{{ (payoutRate * 100).toFixed(0) }}%</span>
+                </button>
+                <button class="btn-put" :disabled="!canTrade" @click="handleTrade('PUT')">
+                  <div class="btn-content">
+                    <ArrowDownRight :size="18" />
+                    <span>PUT</span>
+                  </div>
+                  <span class="payout">{{ (payoutRate * 100).toFixed(0) }}%</span>
+                </button>
               </div>
-            </div>
-            
-            <div class="ticket-actions">
-              <button class="btn-call" :disabled="!canTrade" @click="handleTrade('CALL')">
-                <div class="btn-content">
-                  <ArrowUpRight :size="20" />
-                  <span>CALL</span>
-                </div>
-                <span class="payout">{{ (payoutRate * 100).toFixed(0) }}%</span>
-              </button>
-              <button class="btn-put" :disabled="!canTrade" @click="handleTrade('PUT')">
-                <div class="btn-content">
-                  <ArrowDownRight :size="20" />
-                  <span>PUT</span>
-                </div>
-                <span class="payout">{{ (payoutRate * 100).toFixed(0) }}%</span>
-              </button>
             </div>
             
             <div class="ticket-hint">Est. return: <span class="highlight">${{ (amount * (1 + payoutRate)).toFixed(2) }}</span></div>
@@ -1477,127 +1486,249 @@ const handleOutsideClick = (e) => {
   position: relative;
 }
 
-/* Trade Ticket Floating Module */
+/* Trade Ticket Floating Module - Mac Dock Style */
 .trade-ticket-floating {
-  position: relative;
-  z-index: 10;
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  width: auto;
+  max-width: calc(100vw - 48px);
 }
 
 .ticket-content {
-  background: rgba(18, 20, 28, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  padding: 20px 24px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(20px);
+  position: relative;
+  background: rgba(18, 20, 28, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 24px;
+  padding: 16px 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(40px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: visible;
+}
+
+.ticket-content:hover {
+  background: rgba(18, 20, 28, 0.9);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+
+/* 预估收益角标 */
+.return-badge {
+  position: absolute;
+  top: -12px;
+  right: 20px;
+  background: linear-gradient(135deg, #5df7c2 0%, #3dffb5 100%);
+  padding: 6px 14px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  box-shadow: 0 4px 16px rgba(93, 247, 194, 0.4), 0 0 0 1px rgba(93, 247, 194, 0.2);
+  animation: badge-glow 2s ease-in-out infinite;
+}
+
+@keyframes badge-glow {
+  0%, 100% {
+    box-shadow: 0 4px 16px rgba(93, 247, 194, 0.4), 0 0 0 1px rgba(93, 247, 194, 0.2);
+  }
+  50% {
+    box-shadow: 0 6px 24px rgba(93, 247, 194, 0.6), 0 0 0 1px rgba(93, 247, 194, 0.4);
+  }
+}
+
+.return-badge .return-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(10, 14, 20, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
+
+.return-badge .return-value {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0a0e14;
+  line-height: 1;
+}
+
+.dock-layout {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-width: none;
+}
+
+.dock-layout::-webkit-scrollbar {
+  display: none;
+}
+
+.dock-divider {
+  width: 1px;
+  height: 32px;
+  background: linear-gradient(to bottom, 
+    rgba(255, 255, 255, 0),
+    rgba(255, 255, 255, 0.15),
+    rgba(255, 255, 255, 0)
+  );
 }
 
 .ticket-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.ticket-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
+  display: none;
 }
 
 .ticket-inputs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 
 .input-group-compact {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 
-.input-group-compact label {
+.input-group-compact .input-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   color: #8fa1c4;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
-.input-group-compact .input-wrapper {
+.input-group-compact .label-icon {
+  color: #5df7c2;
+  opacity: 0.8;
+}
+
+.input-group-compact .input-field {
   position: relative;
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 2px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.input-group-compact .input-field:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(93, 247, 194, 0.3);
+}
+
+.input-group-compact .input-field:focus-within {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(93, 247, 194, 0.5);
+  box-shadow: 0 0 0 3px rgba(93, 247, 194, 0.1);
 }
 
 .input-group-compact input,
 .input-group-compact select {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 10px 10px 10px 32px;
-  border-radius: 10px;
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 10px 12px;
   color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  transition: all 0.2s;
+  font-size: 15px;
+  font-weight: 700;
+  min-width: 80px;
   box-sizing: border-box;
-}
-
-.input-group-compact input:focus,
-.input-group-compact select:focus {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(93, 247, 194, 0.4);
   outline: none;
 }
 
+.input-group-compact .input-unit {
+  padding: 6px 12px;
+  background: rgba(93, 247, 194, 0.15);
+  color: #5df7c2;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 4px;
+}
+
+.input-group-compact select {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%235df7c2' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.input-group-compact select option {
+  background: #12141c;
+  color: #fff;
+  padding: 8px;
+}
+
 .ticket-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 12px;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 0;
 }
 
 .ticket-actions .btn-call,
 .ticket-actions .btn-put {
   border: none;
-  padding: 14px 20px;
-  border-radius: 12px;
+  padding: 10px 28px;
+  border-radius: 14px;
   font-weight: 700;
-  font-size: 15px;
+  font-size: 14px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
   display: flex;
-  flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .ticket-actions .btn-call {
-  background: linear-gradient(135deg, #5df7c2 0%, #3dffb5 100%);
-  color: #0a0e14;
-  box-shadow: 0 4px 16px rgba(93, 247, 194, 0.3);
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
 }
 
 .ticket-actions .btn-call:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 24px rgba(93, 247, 194, 0.5);
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 6px 24px rgba(16, 185, 129, 0.5);
 }
 
 .ticket-actions .btn-put {
-  background: linear-gradient(135deg, #ff7b7b 0%, #ff5b5b 100%);
-  color: #fff;
-  box-shadow: 0 4px 16px rgba(255, 123, 123, 0.3);
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
 }
 
 .ticket-actions .btn-put:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 24px rgba(255, 123, 123, 0.5);
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 6px 24px rgba(239, 68, 68, 0.5);
 }
 
 .ticket-actions .btn-call:disabled,
@@ -1610,35 +1741,25 @@ const handleOutsideClick = (e) => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .ticket-actions .payout {
-  font-size: 12px;
-  font-weight: 600;
-  opacity: 0.8;
+  display: none;
 }
 
 .ticket-hint {
-  text-align: center;
-  font-size: 13px;
-  color: #8fa1c4;
-  font-weight: 500;
-}
-
-.ticket-hint .highlight {
-  color: #5df7c2;
-  font-weight: 700;
+  display: none;
 }
 
 .ticket-content .alert {
   padding: 10px 12px;
   background: rgba(255, 123, 123, 0.1);
   border: 1px solid rgba(255, 123, 123, 0.3);
-  border-radius: 8px;
+  border-radius: 12px;
   color: #ff7b7b;
   font-size: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   font-weight: 500;
 }
 
