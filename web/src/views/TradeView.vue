@@ -15,17 +15,12 @@
           <span class="label"><Wallet :size="14" /> Balance</span>
           <span class="value">{{ balanceDisplay }}</span>
         </div>
-        <div class="status-chip" :class="{ live: isConnected }">
-          <span class="dot"></span>
-          {{ isConnected ? 'Live Feed' : 'Reconnecting' }}
-          <Zap :size="14" :fill="isConnected ? '#3dffb5' : 'none'" />
-        </div>
       </div>
     </header>
 
     <div class="workspace">
       <section class="chart-pane">
-        <div class="chart-glass">
+        <div class="chart-glass" @click="handleOutsideClick">
           <div class="chart-toolbar">
             <div class="symbol-block">
               <div class="symbol-select-wrapper">
@@ -36,12 +31,35 @@
                 </select>
                 <ChevronDown class="select-arrow" :size="16" />
               </div>
+              <div class="price-group">
+                <div class="price-ticker" :class="{ up: isPriceUp, down: !isPriceUp }">
+                  {{ formattedPrice }}
+                  <component :is="isPriceUp ? TrendingUp : TrendingDown" :size="18" />
+                </div>
+                <div class="market-stats">
+                  <div class="stat-item" :class="marketStats.change >= 0 ? 'up' : 'down'">
+                    <span class="stat-label">24h Chg</span>
+                    <span class="stat-value">
+                      {{ marketStats.change >= 0 ? '+' : '' }}{{ formatWithPrecision(marketStats.change) }}
+                      ({{ marketStats.changePercent.toFixed(2) }}%)
+                    </span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">24h High</span>
+                    <span class="stat-value">{{ formatWithPrecision(marketStats.high) }}</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">24h Low</span>
+                    <span class="stat-value">{{ formatWithPrecision(marketStats.low) }}</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="toolbar-actions">
               <!-- Chart & Timeframe Menu -->
               <div class="tool-wrapper">
-                <button class="tool-btn" :class="{ active: activeMenu === 'chart' }" @click="toggleMenu('chart')">
+                <button class="tool-btn" :class="{ active: activeMenu === 'chart' }" @click.stop="toggleMenu('chart')">
                   <BarChart2 :size="18" />
                   <span class="tool-badge">{{ timeframeLabel(timeframe) }}</span>
                 </button>
@@ -49,14 +67,14 @@
 
               <!-- Indicators Menu -->
               <div class="tool-wrapper">
-                <button class="tool-btn" :class="{ active: activeMenu === 'indicators' }" @click="toggleMenu('indicators')">
+                <button class="tool-btn" :class="{ active: activeMenu === 'indicators' }" @click.stop="toggleMenu('indicators')">
                   <Sliders :size="18" />
                 </button>
               </div>
 
               <!-- Drawing Menu -->
               <div class="tool-wrapper">
-                <button class="tool-btn" :class="{ active: activeMenu === 'drawing' }" @click="toggleMenu('drawing')">
+                <button class="tool-btn" :class="{ active: activeMenu === 'drawing' }" @click.stop="toggleMenu('drawing')">
                   <PenTool :size="18" />
                 </button>
               </div>
@@ -92,13 +110,7 @@
           </div>
 
           <!-- Unified Floating Side Panel -->
-          <div v-if="activeMenu" class="floating-side-panel">
-            <div class="panel-header">
-              <span class="panel-title">{{ menuTitle }}</span>
-              <button class="panel-close" @click="activeMenu = null">
-                <X :size="16" />
-              </button>
-            </div>
+          <div v-if="activeMenu" class="floating-side-panel" @click.stop>
             <div class="panel-content">
               <!-- Chart Settings Content -->
               <div v-if="activeMenu === 'chart'" class="chart-menu-content">
@@ -406,15 +418,6 @@ const toggleMenu = (menu) => {
   activeMenu.value = activeMenu.value === menu ? null : menu;
 };
 
-const menuTitle = computed(() => {
-  switch (activeMenu.value) {
-    case 'chart': return 'Chart Settings';
-    case 'indicators': return 'Indicators';
-    case 'drawing': return 'Drawing Tools';
-    default: return '';
-  }
-});
-
 // Configuration Lists
 const timeframesConfig = [
   { label: 'S5', value: 5 }, { label: 'S10', value: 10 }, { label: 'S15', value: 15 }, { label: 'S30', value: 30 },
@@ -594,6 +597,11 @@ const statusClass = (status) => {
 const formatPrice = (price, symbol) => {
   const prec = precisionMap[symbol] || 4;
   return price ? Number(price).toFixed(prec) : '--';
+};
+
+const formatWithPrecision = (value) => {
+  if (value === null || value === undefined) return '--';
+  return Number(value).toFixed(pricePrecision.value);
 };
 
 const formatPnl = (order) => {
@@ -860,6 +868,16 @@ watch(
     if (series) {
       createSeries();
     }
+    // Update chart price formatter when symbol changes
+    if (chart) {
+      chart.applyOptions({
+        localization: {
+          priceFormatter: (price) => {
+            return Number(price).toFixed(pricePrecision.value);
+          },
+        },
+      });
+    }
     marketStore.fetchActiveOrders();
     fetchHistory(true);
     refreshCandles();
@@ -982,6 +1000,12 @@ onMounted(async () => {
         bottom: 0.2,
       },
       borderVisible: false,
+      minimumWidth: 80,
+    },
+    localization: {
+      priceFormatter: (price) => {
+        return Number(price).toFixed(pricePrecision.value);
+      },
     },
   });
 
@@ -1103,6 +1127,14 @@ const handleWithdraw = async () => {
     fundsError.value = err.response?.data?.error || err.message;
   }
 };
+
+const handleOutsideClick = (e) => {
+  // Close panel when clicking outside of it
+  // Check if click is on chart-glass or any child that's not the panel
+  if (activeMenu.value && !e.target.closest('.floating-side-panel')) {
+    activeMenu.value = null;
+  }
+};
 </script>
 
 <style scoped>
@@ -1170,8 +1202,7 @@ const handleWithdraw = async () => {
   gap: 12px;
 }
 
-.balance-chip,
-.status-chip {
+.balance-chip {
   padding: 8px 16px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1183,8 +1214,7 @@ const handleWithdraw = async () => {
   transition: all 0.2s;
 }
 
-.balance-chip:hover,
-.status-chip:hover {
+.balance-chip:hover {
   border-color: rgba(255, 255, 255, 0.15);
   background: rgba(11, 14, 20, 0.8);
 }
@@ -1205,35 +1235,6 @@ const handleWithdraw = async () => {
   font-size: 18px;
   color: #fff;
   font-variant-numeric: tabular-nums;
-}
-
-.status-chip {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 13px;
-  color: #ffbe3d;
-}
-
-.status-chip .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ffbe3d;
-  box-shadow: 0 0 12px rgba(255, 190, 61, 0.4);
-}
-
-.status-chip.live {
-  color: #3dffb5;
-  border-color: rgba(61, 255, 181, 0.2);
-  background: rgba(61, 255, 181, 0.05);
-}
-
-.status-chip.live .dot {
-  background: #3dffb5;
-  box-shadow: 0 0 12px rgba(61, 255, 181, 0.6);
 }
 
 .workspace {
@@ -1288,6 +1289,16 @@ const handleWithdraw = async () => {
   gap: 4px;
   align-items: center;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.symbol-block {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.toolbar-actions {
+  align-items: center;
 }
 
 .symbol-select-wrapper select {
@@ -2168,12 +2179,13 @@ const handleWithdraw = async () => {
   color: #fff;
 }
 
-/* Floating Tools Panel */
-.floating-tools-panel {
+/* Unified Floating Side Panel */
+.floating-side-panel {
   position: absolute;
-  top: 70px;
-  left: 20px;
-  width: 280px;
+  top: 72px;
+  right: 24px;
+  width: 360px;
+  max-height: calc(100% - 96px);
   background: rgba(18, 20, 28, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
@@ -2181,74 +2193,74 @@ const handleWithdraw = async () => {
   backdrop-filter: blur(20px);
   z-index: 50;
   overflow: hidden;
-  animation: slideIn 0.2s ease-out;
+  display: flex;
+  flex-direction: column;
+  animation: slideInRight 0.2s ease-out;
 }
 
-@keyframes slideIn {
+@keyframes slideInRight {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.panel-header {
+.panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* Content Specific Styles */
+.chart-menu-content {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.02);
+  flex-direction: column;
+  gap: 20px;
 }
 
-.panel-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #fff;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.indicators-menu-content .indicators-grid {
+  display: grid;
+  grid-template-columns: 1fr; /* Single column for better readability in side panel */
+  gap: 4px;
 }
 
-.panel-close {
-  background: transparent;
-  border: none;
-  color: #8fa1c4;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-}
-
-.tools-grid {
+.drawing-menu-content .tools-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding: 12px;
+  gap: 12px;
 }
 
 .tool-grid-item {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 10px;
-  padding: 12px 4px;
-  color: #8fa1c4;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 16px 8px;
+  border-radius: 12px;
+  color: #d1d4dc;
   cursor: pointer;
   transition: all 0.2s;
+  min-height: 80px;
 }
 
 .tool-grid-item:hover {
   background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
   color: #fff;
-  border-color: rgba(255, 255, 255, 0.1);
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-.tool-grid-item .tool-label {
-  font-size: 10px;
+.tool-grid-item:active {
+  transform: translateY(0);
+}
+
+.tool-label {
+  font-size: 11px;
   text-align: center;
-  line-height: 1.2;
+  line-height: 1.3;
+  font-weight: 500;
 }
 
 /* Immersive Toolbar Overrides */
@@ -2257,7 +2269,7 @@ const handleWithdraw = async () => {
   align-items: center;
   gap: 6px;
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   color: #8fa1c4;
   padding: 8px 10px;
   border-radius: 6px;
@@ -2266,8 +2278,15 @@ const handleWithdraw = async () => {
   height: 32px;
 }
 
-.tool-btn:hover, .tool-btn.active {
+.tool-btn:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
+}
+
+.tool-btn.active {
+  background: rgba(93, 247, 194, 0.1);
+  color: #5df7c2;
+  border-color: rgba(93, 247, 194, 0.3);
+  box-shadow: 0 0 10px rgba(93, 247, 194, 0.1);
 }
 </style>
