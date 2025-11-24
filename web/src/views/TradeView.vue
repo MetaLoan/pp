@@ -12,8 +12,14 @@
       </div>
       <div class="hero-right">
         <div class="balance-chip">
-          <span class="label"><Wallet :size="14" /> Balance</span>
-          <span class="value">{{ balanceDisplay }}</span>
+          <div class="balance-info">
+            <span class="label"><Wallet :size="14" /> Balance</span>
+            <span class="value">{{ balanceDisplay }}</span>
+          </div>
+          <button class="deposit-btn" @click="showDepositModal = true">
+            <ArrowDownRight :size="16" />
+            Deposit
+          </button>
         </div>
       </div>
     </header>
@@ -258,19 +264,6 @@
         </div>
 
         <div class="card-grid">
-          <div class="card debug-card">
-            <div class="card-head">
-              <span>Live Prices</span>
-            </div>
-            <div class="card-body debug-body">
-              <div v-if="lastTicks.length === 0" class="debug-row">No ticks yet</div>
-              <div v-else class="debug-row" v-for="(t, idx) in lastTicks" :key="idx">
-                <span class="debug-time">{{ t.timeLabel }}</span>
-                <span class="debug-value">{{ t.valueLabel }}</span>
-              </div>
-            </div>
-          </div>
-
           <div class="card positions-card">
             <div class="card-head tabs">
               <button :class="['tab', currentTab === 'active' ? 'active' : '']" @click="currentTab = 'active'">
@@ -394,28 +387,38 @@
           </div>
         </div>
 
-        <div class="card funds-card">
-          <div class="card-head">
-            <span><Wallet :size="16" /> Funds</span>
-            <span class="badge">Wallet</span>
-          </div>
-          <div class="card-body funds-body">
-            <div class="input-row">
-              <label>Deposit (USDT)</label>
-              <div class="input-group">
-                <input type="number" v-model="depositAmount" min="1" />
-                <button class="ghost" @click="handleDeposit"><ArrowDownRight :size="14" /> In</button>
-              </div>
+        <!-- Deposit Modal -->
+        <div v-if="showDepositModal" class="modal-overlay" @click="showDepositModal = false">
+          <div class="modal-card" @click.stop>
+            <div class="modal-header">
+              <h3><Wallet :size="20" /> Deposit Funds</h3>
+              <button class="modal-close" @click="showDepositModal = false">
+                <X :size="20" />
+              </button>
             </div>
-            <div class="input-row">
-              <label>Withdraw (USDT)</label>
-              <div class="input-group">
-                <input type="number" v-model="withdrawAmount" min="1" />
-                <button class="ghost" @click="handleWithdraw"><ArrowUpRight :size="14" /> Out</button>
+            <div class="modal-body">
+              <div class="input-row">
+                <label>Amount (USDT)</label>
+                <div class="input-wrapper">
+                  <DollarSign :size="14" class="input-icon" />
+                  <input type="number" v-model="depositAmount" min="1" placeholder="Enter amount" />
+                </div>
               </div>
+              <div class="quick-amounts">
+                <button v-for="amt in [10, 50, 100, 500]" :key="amt" class="quick-btn" @click="depositAmount = amt">
+                  ${{ amt }}
+                </button>
+              </div>
+              <div v-if="fundsMsg" class="funds-msg">{{ fundsMsg }}</div>
+              <div v-if="fundsError" class="funds-error">{{ fundsError }}</div>
             </div>
-            <div v-if="fundsMsg" class="funds-msg">{{ fundsMsg }}</div>
-            <div v-if="fundsError" class="funds-error">{{ fundsError }}</div>
+            <div class="modal-footer">
+              <button class="btn-secondary" @click="showDepositModal = false">Cancel</button>
+              <button class="btn-primary" @click="handleDeposit">
+                <ArrowDownRight :size="16" />
+                Confirm Deposit
+              </button>
+            </div>
           </div>
         </div>
       </aside>
@@ -449,6 +452,7 @@ const depositAmount = ref(100);
 const withdrawAmount = ref(50);
 const fundsMsg = ref('');
 const fundsError = ref('');
+const showDepositModal = ref(false);
 const chartType = ref('line'); // line | area | candle
 const timeframe = ref(5); // seconds per bar
 const showSMA = ref(false);
@@ -1266,6 +1270,10 @@ const handleDeposit = async () => {
     const res = await api.post('/funds/deposit', { amount: depositAmount.value, currency: 'USDT' });
     fundsMsg.value = `Deposit request submitted: #${res.data.request.id}`;
     marketStore.fetchBalance();
+    setTimeout(() => {
+      showDepositModal.value = false;
+      fundsMsg.value = '';
+    }, 2000);
   } catch (err) {
     fundsError.value = err.response?.data?.error || err.message;
   }
@@ -1371,20 +1379,28 @@ const handleOutsideClick = (e) => {
 }
 
 .balance-chip {
-  padding: 8px 16px;
+  padding: 12px 16px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(11, 14, 20, 0.6);
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 140px;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  min-width: 280px;
   transition: all 0.2s;
 }
 
 .balance-chip:hover {
   border-color: rgba(255, 255, 255, 0.15);
   background: rgba(11, 14, 20, 0.8);
+}
+
+.balance-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
 }
 
 .balance-chip .label {
@@ -1405,17 +1421,42 @@ const handleOutsideClick = (e) => {
   font-variant-numeric: tabular-nums;
 }
 
+.deposit-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #5df7c2 0%, #3dffb5 100%);
+  color: #0a0e14;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(93, 247, 194, 0.3);
+}
+
+.deposit-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(93, 247, 194, 0.4);
+}
+
+.deposit-btn:active {
+  transform: translateY(0);
+}
+
 .workspace {
   display: grid;
   grid-template-columns: 1fr 380px;
-  gap: 20px;
+  gap: 24px;
   flex: 1;
 }
 
 .chart-pane {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   min-height: 0;
 }
 
@@ -2658,5 +2699,161 @@ const handleOutsideClick = (e) => {
   color: #5df7c2;
   border-color: rgba(93, 247, 194, 0.3);
   box-shadow: 0 0 10px rgba(93, 247, 194, 0.1);
+}
+
+/* Deposit Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-card {
+  background: rgba(18, 20, 28, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  width: 90%;
+  max-width: 480px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from { 
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-header h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+
+.modal-close {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #8fa1c4;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.quick-amounts {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.quick-btn {
+  flex: 1;
+  min-width: 70px;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #8fa1c4;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quick-btn:hover {
+  background: rgba(93, 247, 194, 0.1);
+  border-color: rgba(93, 247, 194, 0.3);
+  color: #5df7c2;
+}
+
+.btn-primary {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #5df7c2 0%, #3dffb5 100%);
+  color: #0a0e14;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(93, 247, 194, 0.4);
+}
+
+.btn-secondary {
+  flex: 1;
+  padding: 12px 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #8fa1c4;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 </style>
