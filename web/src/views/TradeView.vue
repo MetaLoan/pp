@@ -409,78 +409,206 @@
       </section>
 
       <aside class="side-pane">
-        <!-- Positions Card with Tabs -->
-        <div class="card positions-card">
-          <div class="card-head tabs">
-            <button :class="['tab', currentTab === 'active' ? 'active' : '']" @click="currentTab = 'active'">
-              <Activity :size="14" /> Active ({{ activeOrders.length }})
-            </button>
-            <button :class="['tab', currentTab === 'recent' ? 'active' : '']" @click="currentTab = 'recent'">
-              <History :size="14" /> Recent ({{ orderHistory.length }})
-            </button>
-          </div>
-          <div class="card-body positions-body">
-            <div v-if="currentTab === 'active'">
-              <div v-if="activeOrders.length === 0" class="no-orders">
-                <Layers :size="48" stroke-width="1" />
-                <span>No active trades</span>
-              </div>
-              <div v-else class="order-item" v-for="order in activeOrders" :key="order.id">
-                <div class="order-header">
-                  <span class="symbol">{{ order.asset_symbol }}</span>
-                  <span :class="['direction', order.direction.toLowerCase()]">
-                    <component :is="order.direction === 'CALL' ? ArrowUpRight : ArrowDownRight" :size="16" />
-                    {{ order.direction }}
-                  </span>
+        <div class="dock-rail">
+          
+          <button 
+            v-for="dock in rightDockItems" 
+            :key="dock.id" 
+            :class="['dock-btn', { active: activeRightModule === dock.id }]"
+            @click="activeRightModule = dock.id"
+          >
+            <component :is="dock.icon" :size="18" />
+            <div class="dock-text">
+              <span class="dock-label">{{ dock.label }}</span>
+            </div>
+          </button>
+        </div>
+
+        <div class="side-panel-body">
+          <!-- Positions Card with Tabs -->
+          <div v-if="activeRightModule === 'orders'" class="card positions-card">
+            <div class="card-head tabs">
+              <button :class="['tab', currentTab === 'active' ? 'active' : '']" @click="currentTab = 'active'">
+                <Activity :size="14" /> Active ({{ activeOrders.length }})
+              </button>
+              <button :class="['tab', currentTab === 'recent' ? 'active' : '']" @click="currentTab = 'recent'">
+                <History :size="14" /> Recent ({{ orderHistory.length }})
+              </button>
+            </div>
+            <div class="card-body positions-body">
+              <div v-if="currentTab === 'active'">
+                <div v-if="activeOrders.length === 0" class="no-orders">
+                  <Layers :size="48" stroke-width="1" />
+                  <span>No active trades</span>
                 </div>
-                <div class="order-details">
-                  <div>Entry: {{ formatPrice(order.open_price, order.asset_symbol) }}</div>
-                  <div>Amount: ${{ order.amount }}</div>
-                  <div class="timer"><Clock :size="12" /> {{ getTimeLeft(order) }}s</div>
-                  <div class="pnl" :class="getPnlClass(order)">
-                    Est. {{ getEstimatedPnl(order) }}
+                <div v-else class="order-item" v-for="order in activeOrders" :key="order.id">
+                  <div class="order-header">
+                    <span class="symbol">{{ order.asset_symbol }}</span>
+                    <span :class="['direction', order.direction.toLowerCase()]">
+                      <component :is="order.direction === 'CALL' ? ArrowUpRight : ArrowDownRight" :size="16" />
+                      {{ order.direction }}
+                    </span>
                   </div>
+                  <div class="order-details">
+                    <div>Entry: {{ formatPrice(order.open_price, order.asset_symbol) }}</div>
+                    <div>Amount: ${{ order.amount }}</div>
+                    <div class="timer"><Clock :size="12" /> {{ getTimeLeft(order) }}s</div>
+                    <div class="pnl" :class="getPnlClass(order)">
+                      Est. {{ getEstimatedPnl(order) }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div v-else>
+                <div class="history-actions">
+                  <label>Status</label>
+                  <div class="select-wrapper-small">
+                    <select v-model="historyStatus">
+                      <option value="">All</option>
+                      <option value="won">Won</option>
+                      <option value="lost">Lost</option>
+                      <option value="draw">Draw</option>
+                    </select>
+                    <ChevronDown :size="12" class="arrow" />
+                  </div>
+                </div>
+                <div v-if="orderHistory.length === 0" class="no-orders">
+                  <History :size="48" stroke-width="1" />
+                  <span>No history yet</span>
+                </div>
+                <div v-else class="order-item" v-for="order in orderHistory" :key="order.id">
+                  <div class="order-header">
+                    <span class="symbol">{{ order.asset_symbol }}</span>
+                    <span class="status" :class="statusClass(order.status)">{{ order.status }}</span>
+                  </div>
+                  <div class="order-details">
+                    <div>
+                      <strong :class="['direction', order.direction.toLowerCase()]">
+                        {{ order.direction }}
+                      </strong>
+                    </div>
+                    <div>Entry: {{ formatPrice(order.open_price, order.asset_symbol) }}</div>
+                    <div>Exit: {{ order.close_price ? formatPrice(order.close_price, order.asset_symbol) : '--' }}</div>
+                    <div>Amount: ${{ order.amount }}</div>
+                    <div>PnL: <span :class="statusClass(order.status)">{{ formatPnl(order) }}</span></div>
+                    <div>{{ order.close_time ? new Date(order.close_time).toLocaleTimeString() : '--' }}</div>
+                  </div>
+                </div>
+                <button v-if="orderHistory.length > 0 && marketStore.historyHasMore" class="load-more" @click="loadMoreHistory">
+                  Load more
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Signal Center -->
+          <div v-else-if="activeRightModule === 'signals'" class="card signal-card">
+            <div class="card-head">
+              <span><Antenna :size="14" /> 交易信号</span>
+              <span class="badge accent">实时脉冲</span>
+            </div>
+            <div class="signal-list">
+              <div v-for="sig in signalFeed" :key="sig.title" class="signal-row">
+                <div class="signal-meta">
+                  <div class="signal-title">{{ sig.title }}</div>
+                  <div class="signal-sub">{{ sig.metric }}</div>
+                  <div class="signal-confidence">
+                    <div class="confidence-bar">
+                      <span class="confidence-fill" :style="{ width: Math.round(sig.confidence * 100) + '%' }"></span>
+                    </div>
+                    <span class="confidence-label">{{ Math.round(sig.confidence * 100) }}%</span>
+                  </div>
+                </div>
+                <div class="signal-actions">
+                  <span :class="['pill', sig.action === 'CALL' ? 'pill-green' : 'pill-red']">{{ sig.action }}</span>
+                  <span class="pill pill-soft">{{ sig.timing }}</span>
                 </div>
               </div>
             </div>
-            <div v-else>
-              <div class="history-actions">
-                <label>Status</label>
-                <div class="select-wrapper-small">
-                  <select v-model="historyStatus">
-                    <option value="">All</option>
-                    <option value="won">Won</option>
-                    <option value="lost">Lost</option>
-                    <option value="draw">Draw</option>
-                  </select>
-                  <ChevronDown :size="12" class="arrow" />
+          </div>
+
+          <!-- Social Trading -->
+          <div v-else-if="activeRightModule === 'social'" class="card social-card">
+            <div class="card-head">
+              <span><Users :size="14" /> 社交交易</span>
+              <span class="badge">Top Movers</span>
+            </div>
+            <div class="social-list">
+              <div v-for="trader in socialLeaders" :key="trader.name" class="social-row">
+                <div class="avatar">{{ trader.initials }}</div>
+                <div class="social-meta">
+                  <div class="social-name">{{ trader.name }}</div>
+                  <div class="social-sub">{{ trader.region }} · 胜率 {{ trader.winRate }}%</div>
+                </div>
+                <div class="social-stats">
+                  <span class="pill pill-green">ROI {{ trader.roi }}%</span>
+                  <span class="pill pill-soft">{{ trader.copiers }} 跟单</span>
                 </div>
               </div>
-              <div v-if="orderHistory.length === 0" class="no-orders">
-                <History :size="48" stroke-width="1" />
-                <span>No history yet</span>
-              </div>
-              <div v-else class="order-item" v-for="order in orderHistory" :key="order.id">
-                <div class="order-header">
-                  <span class="symbol">{{ order.asset_symbol }}</span>
-                  <span class="status" :class="statusClass(order.status)">{{ order.status }}</span>
-                </div>
-                <div class="order-details">
-                  <div>
-                    <strong :class="['direction', order.direction.toLowerCase()]">
-                      {{ order.direction }}
-                    </strong>
-                  </div>
-                  <div>Entry: {{ formatPrice(order.open_price, order.asset_symbol) }}</div>
-                  <div>Exit: {{ order.close_price ? formatPrice(order.close_price, order.asset_symbol) : '--' }}</div>
-                  <div>Amount: ${{ order.amount }}</div>
-                  <div>PnL: <span :class="statusClass(order.status)">{{ formatPnl(order) }}</span></div>
-                  <div>{{ order.close_time ? new Date(order.close_time).toLocaleTimeString() : '--' }}</div>
-                </div>
-              </div>
-              <button v-if="orderHistory.length > 0 && marketStore.historyHasMore" class="load-more" @click="loadMoreHistory">
-                Load more
+            </div>
+          </div>
+
+          <!-- Quick Trade -->
+          <div v-else-if="activeRightModule === 'quick'" class="card quick-card">
+            <div class="card-head">
+              <span><Target :size="14" /> 快速交易</span>
+              <span class="badge">One-tap</span>
+            </div>
+            <div class="quick-grid">
+              <button 
+                v-for="preset in quickSetups" 
+                :key="preset.label" 
+                class="quick-chip"
+                @click="() => { amount.value = preset.amount; duration.value = preset.duration; activeRightModule.value = 'orders'; }"
+              >
+                <span class="quick-label">{{ preset.label }}</span>
+                <span class="quick-sub">{{ preset.duration }}s · ${{ preset.amount }}</span>
+                <span class="pill" :class="preset.dir === 'CALL' ? 'pill-green' : 'pill-red'">{{ preset.dir }}</span>
               </button>
+            </div>
+            <div class="quick-footer">
+              <span>当前回报率</span>
+              <div class="roi-meter">
+                <div class="roi-fill" :style="{ width: '85%' }"></div>
+                <span class="roi-label">85%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pending / Trigger Orders -->
+          <div v-else-if="activeRightModule === 'pending'" class="card pending-card">
+            <div class="card-head">
+              <span><Hourglass :size="14" /> 挂单交易</span>
+              <span class="badge">计划</span>
+            </div>
+            <div class="pending-list">
+              <div v-for="item in pendingOrders" :key="item.id" class="pending-row">
+                <div class="pending-meta">
+                  <div class="pending-name">{{ item.symbol }}</div>
+                  <div class="pending-sub">触发价 {{ formatPrice(item.trigger, item.symbol) }}</div>
+                </div>
+                <div class="pending-actions">
+                  <span class="pill pill-soft">{{ item.window }}</span>
+                  <span class="pill" :class="item.dir === 'CALL' ? 'pill-green' : 'pill-red'">{{ item.dir }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Shortcuts -->
+          <div v-else-if="activeRightModule === 'shortcuts'" class="card shortcuts-card">
+            <div class="card-head">
+              <span><Keyboard :size="14" /> 快捷键</span>
+              <span class="badge accent">Pro</span>
+            </div>
+            <div class="shortcut-grid">
+              <div v-for="hotkey in shortcutList" :key="hotkey.keys" class="shortcut-row">
+                <span class="keycap">{{ hotkey.keys }}</span>
+                <div class="shortcut-meta">
+                  <div class="shortcut-name">{{ hotkey.label }}</div>
+                  <div class="shortcut-sub">{{ hotkey.detail }}</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -539,7 +667,8 @@ import {
   RefreshCw, ChevronDown, BarChart2, LineChart, PieChart, ToggleLeft, ToggleRight,
   MoreHorizontal, PenTool, Grid, Sliders, X, Check, Star, Search,
   Minus, MoreVertical, Menu, Fan, Maximize, Square, Move, GitBranch,
-  ShoppingCart, Award, Trophy, MessageCircle, HelpCircle, User, Gem
+  ShoppingCart, Award, Trophy, MessageCircle, HelpCircle, User, Gem,
+  Antenna, Users, Target, Hourglass, Keyboard
 } from 'lucide-vue-next';
 import { useMarketStore } from '../stores/market';
 import api from '../api/axios';
@@ -565,6 +694,47 @@ const showSMA = ref(false);
 const showEMA = ref(false);
 const smaPeriod = ref(10);
 const timeframeOptions = [1, 5, 15, 30, 60, 300, 600]; // Keep for logic mapping
+
+// Right dock modules
+const activeRightModule = ref('orders');
+const rightDockItems = [
+  { id: 'orders', label: 'Orders', icon: History },
+  { id: 'signals', label: 'Signals', icon: Antenna },
+  { id: 'social', label: 'Social', icon: Users },
+  { id: 'quick', label: 'Quick Trade', icon: Target },
+  { id: 'pending', label: 'Pending', icon: Hourglass },
+  { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
+];
+
+const signalFeed = ref([
+  { title: 'EUR/USD 突破', metric: '动量 +1.2σ', confidence: 0.82, action: 'CALL', timing: '5m' },
+  { title: 'BTC/USDT 回踩', metric: 'RSI 34 · 趋势向上', confidence: 0.74, action: 'CALL', timing: '3m' },
+  { title: 'XAU/USD 拐点', metric: '布林中轨反弹', confidence: 0.68, action: 'PUT', timing: '1m' },
+]);
+
+const socialLeaders = ref([
+  { name: 'NovaQuant', initials: 'NQ', region: '新加坡', winRate: 78, roi: 34, copiers: '2.1k' },
+  { name: 'AlphaWave', initials: 'AW', region: '伦敦', winRate: 74, roi: 28, copiers: '1.4k' },
+  { name: 'TokyoEdge', initials: 'TE', region: '东京', winRate: 71, roi: 22, copiers: '940' },
+]);
+
+const quickSetups = ref([
+  { label: '顺势突破', duration: 60, amount: 25, dir: 'CALL' },
+  { label: '回撤进场', duration: 180, amount: 50, dir: 'PUT' },
+  { label: '脉冲抢先', duration: 30, amount: 15, dir: 'CALL' },
+]);
+
+const pendingOrders = ref([
+  { id: 1, symbol: 'EURUSD', trigger: 1.0825, dir: 'CALL', window: '60s' },
+  { id: 2, symbol: 'BTCUSDT', trigger: 62850, dir: 'PUT', window: '5m' },
+]);
+
+const shortcutList = [
+  { keys: 'A', label: '快速下单 CALL', detail: '使用当前金额和时长' },
+  { keys: 'S', label: '快速下单 PUT', detail: '使用当前金额和时长' },
+  { keys: 'H', label: '显示/隐藏信号', detail: '切换到交易信号面板' },
+  { keys: '⌘ + /', label: '查看所有快捷键', detail: '打开帮助弹窗' },
+];
 
 // UI State for Menus
 const activeMenu = ref(null); // 'chart', 'indicators', 'drawing', 'more', 'symbol'
@@ -1433,6 +1603,8 @@ const handleOutsideClick = (e) => {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  --dock-width: clamp(68px, 7vw, 86px);
+  --dock-offset: clamp(10px, 1.6vw, 18px);
 }
 
 .hero {
@@ -1639,9 +1811,10 @@ const handleOutsideClick = (e) => {
 
 .workspace {
   display: grid;
-  grid-template-columns: 1fr 380px;
-  gap: 24px;
+  grid-template-columns: 65fr 35fr;
+  gap: 8px;
   flex: 1;
+  align-items: start;
 }
 
 .chart-pane {
@@ -2614,7 +2787,350 @@ const handleOutsideClick = (e) => {
 .side-pane {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
+  position: relative;
+}
+
+/* Reserve space so fixed dock does not block cards or chart */
+@media (min-width: 1025px) {
+  .workspace {
+    padding-right: calc(var(--dock-width) + var(--dock-offset) + 2px);
+    box-sizing: border-box;
+  }
+  .chart-pane {
+    margin-right: calc(var(--dock-width) + var(--dock-offset) + 2px);
+  }
+  .side-pane {
+    margin-right: calc(var(--dock-width) + var(--dock-offset) + 2px);
+  }
+}
+
+.dock-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: linear-gradient(180deg, rgba(24, 29, 41, 0.9), rgba(18, 20, 28, 0.9));
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 8px 6px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+  position: fixed;
+  top: 150px;
+  right: var(--dock-offset);
+  transform: translateY(0);
+  z-index: 90;
+  width: var(--dock-width);
+  backdrop-filter: blur(14px);
+}
+
+.dock-title {
+  font-size: 11px;
+  color: #6b7280;
+  letter-spacing: 0.6px;
+  padding: 2px 8px;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.dock-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #8fa1c4;
+  padding: 6px 6px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-direction: column;
+}
+
+.dock-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.dock-btn.active {
+  background: rgba(93, 247, 194, 0.12);
+  border-color: rgba(93, 247, 194, 0.2);
+  color: #5df7c2;
+  box-shadow: 0 0 0 1px rgba(93, 247, 194, 0.1);
+}
+
+.dock-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.dock-label {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.side-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+@media (max-width: 1200px) {
+  .dock-rail {
+    right: 8px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .dock-rail {
+    position: static;
+    transform: none;
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+  .dock-btn {
+    flex: 1;
+    flex-direction: row;
+    justify-content: center;
+  }
+  .dock-text {
+    align-items: flex-start;
+  }
+}
+
+.signal-list,
+.social-list,
+.pending-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.signal-row,
+.pending-row,
+.social-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 12px;
+  gap: 10px;
+}
+
+.signal-meta,
+.pending-meta,
+.social-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.signal-title,
+.pending-name,
+.social-name {
+  font-weight: 700;
+  color: #fff;
+}
+
+.signal-sub,
+.pending-sub,
+.social-sub {
+  font-size: 12px;
+  color: #8fa1c4;
+}
+
+.signal-confidence {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.confidence-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.confidence-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #3dffb5, #5df7c2);
+}
+
+.confidence-label {
+  font-size: 11px;
+  color: #5df7c2;
+  font-weight: 700;
+}
+
+.signal-actions,
+.pending-actions,
+.social-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: #d1d4dc;
+}
+
+.pill-green {
+  background: rgba(16, 185, 129, 0.16);
+  color: #5df7c2;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.pill-red {
+  background: rgba(239, 68, 68, 0.16);
+  color: #ff7b7b;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.pill-soft {
+  background: rgba(255, 255, 255, 0.05);
+  color: #8fa1c4;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #5df7c2, #5fa7ff);
+  display: grid;
+  place-items: center;
+  color: #0b0e14;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.quick-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.quick-chip {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  color: #e7ecf5;
+  transition: all 0.2s;
+}
+
+.quick-chip:hover {
+  border-color: rgba(93, 247, 194, 0.3);
+  background: rgba(93, 247, 194, 0.06);
+  color: #fff;
+}
+
+.quick-label {
+  font-weight: 700;
+}
+
+.quick-sub {
+  color: #8fa1c4;
+  font-size: 12px;
+}
+
+.quick-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  color: #8fa1c4;
+  font-size: 12px;
+}
+
+.roi-meter {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.roi-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #5df7c2, #3dffb5);
+}
+
+.roi-label {
+  position: absolute;
+  top: -18px;
+  right: 0;
+  font-size: 11px;
+  color: #5df7c2;
+  font-weight: 700;
+}
+
+.shortcut-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.shortcut-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shortcut-name {
+  font-weight: 700;
+  color: #fff;
+}
+
+.shortcut-sub {
+  color: #8fa1c4;
+  font-size: 12px;
+}
+
+.keycap {
+  min-width: 42px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  text-align: center;
+  font-weight: 700;
+  color: #e7ecf5;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.2);
 }
 
 .trade-card .actions {
