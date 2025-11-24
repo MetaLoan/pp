@@ -263,127 +263,137 @@
           </div>
         </div>
 
-        <div class="card-grid">
-          <div class="card positions-card">
-            <div class="card-head tabs">
-              <button :class="['tab', currentTab === 'active' ? 'active' : '']" @click="currentTab = 'active'">
-                <Activity :size="14" /> Active ({{ activeOrders.length }})
-              </button>
-              <button :class="['tab', currentTab === 'recent' ? 'active' : '']" @click="currentTab = 'recent'">
-                <History :size="14" /> Recent ({{ orderHistory.length }})
-              </button>
-            </div>
-            <div class="card-body positions-body">
-              <div v-if="currentTab === 'active'">
-                <div v-if="activeOrders.length === 0" class="no-orders">
-                  <Layers :size="48" stroke-width="1" />
-                  <span>No active trades</span>
-                </div>
-                <div v-else class="order-item" v-for="order in activeOrders" :key="order.id">
-                  <div class="order-header">
-                    <span class="symbol">{{ order.asset_symbol }}</span>
-                    <span :class="['direction', order.direction.toLowerCase()]">
-                      <component :is="order.direction === 'CALL' ? ArrowUpRight : ArrowDownRight" :size="16" />
-                      {{ order.direction }}
-                    </span>
-                  </div>
-                  <div class="order-details">
-                    <div>Entry: {{ formatPrice(order.open_price, order.asset_symbol) }}</div>
-                    <div>Amount: ${{ order.amount }}</div>
-                    <div class="timer"><Clock :size="12" /> {{ getTimeLeft(order) }}s</div>
-                    <div class="pnl" :class="getPnlClass(order)">
-                      Est. {{ getEstimatedPnl(order) }}
-                    </div>
-                  </div>
-                </div>
+        <!-- Trade Ticket - Floating Bottom Module -->
+        <div class="trade-ticket-floating">
+          <div class="ticket-content">
+            <div class="ticket-header">
+              <div class="ticket-title">
+                <Zap :size="18" />
+                <span>Quick Trade</span>
               </div>
-              <div v-else>
-                <div class="history-actions">
-                  <label>Status</label>
-                  <div class="select-wrapper-small">
-                    <select v-model="historyStatus">
-                      <option value="">All</option>
-                      <option value="won">Won</option>
-                      <option value="lost">Lost</option>
-                      <option value="draw">Draw</option>
-                    </select>
-                    <ChevronDown :size="12" class="arrow" />
-                  </div>
-                </div>
-                <div v-if="orderHistory.length === 0" class="no-orders">
-                  <History :size="48" stroke-width="1" />
-                  <span>No history yet</span>
-                </div>
-                <div v-else class="order-item" v-for="order in orderHistory" :key="order.id">
-                  <div class="order-header">
-                    <span class="symbol">{{ order.asset_symbol }}</span>
-                    <span class="status" :class="statusClass(order.status)">{{ order.status }}</span>
-                  </div>
-                  <div class="order-details">
-                    <div>
-                      <strong :class="['direction', order.direction.toLowerCase()]">
-                        {{ order.direction }}
-                      </strong>
-                    </div>
-                    <div>Entry: {{ formatPrice(order.open_price, order.asset_symbol) }}</div>
-                    <div>Exit: {{ order.close_price ? formatPrice(order.close_price, order.asset_symbol) : '--' }}</div>
-                    <div>Amount: ${{ order.amount }}</div>
-                    <div>PnL: <span :class="statusClass(order.status)">{{ formatPnl(order) }}</span></div>
-                    <div>{{ order.close_time ? new Date(order.close_time).toLocaleTimeString() : '--' }}</div>
-                  </div>
-                </div>
-                <button v-if="orderHistory.length > 0 && marketStore.historyHasMore" class="load-more" @click="loadMoreHistory">
-                  Load more
-                </button>
-              </div>
+              <span class="badge accent">Pro</span>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <aside class="side-pane">
-        <div class="card trade-card">
-          <div class="card-head">
-            <span><Zap :size="16" /> Trade Ticket</span>
-            <span class="badge accent">Pro</span>
-          </div>
-          <div class="card-body">
+            
             <div v-if="errorMsg" class="alert">{{ errorMsg }}</div>
-            <div class="input-row">
-              <label>Amount ($)</label>
-              <div class="input-wrapper">
-                <DollarSign :size="14" class="input-icon" />
-                <input type="number" v-model="amount" min="1" />
+            
+            <div class="ticket-inputs">
+              <div class="input-group-compact">
+                <label>Amount</label>
+                <div class="input-wrapper">
+                  <DollarSign :size="14" class="input-icon" />
+                  <input type="number" v-model="amount" min="1" placeholder="10" />
+                </div>
+              </div>
+              
+              <div class="input-group-compact">
+                <label>Duration</label>
+                <div class="input-wrapper">
+                  <Clock :size="14" class="input-icon" />
+                  <select v-model="duration">
+                    <option value="30">30s</option>
+                    <option value="60">60s</option>
+                    <option value="300">5m</option>
+                  </select>
+                </div>
               </div>
             </div>
-            <div class="input-row">
-              <label>Duration (s)</label>
-              <div class="input-wrapper">
-                <Clock :size="14" class="input-icon" />
-                <select v-model="duration">
-                  <option value="30">30s</option>
-                  <option value="60">60s</option>
-                  <option value="300">5m</option>
-                </select>
-              </div>
-            </div>
-            <div class="actions">
+            
+            <div class="ticket-actions">
               <button class="btn-call" :disabled="!canTrade" @click="handleTrade('CALL')">
                 <div class="btn-content">
-                  <span>CALL</span>
                   <ArrowUpRight :size="20" />
+                  <span>CALL</span>
                 </div>
                 <span class="payout">{{ (payoutRate * 100).toFixed(0) }}%</span>
               </button>
               <button class="btn-put" :disabled="!canTrade" @click="handleTrade('PUT')">
                 <div class="btn-content">
-                  <span>PUT</span>
                   <ArrowDownRight :size="20" />
+                  <span>PUT</span>
                 </div>
                 <span class="payout">{{ (payoutRate * 100).toFixed(0) }}%</span>
               </button>
             </div>
-            <div class="hint">Est. return: ${{ (amount * (1 + payoutRate)).toFixed(2) }}</div>
+            
+            <div class="ticket-hint">Est. return: <span class="highlight">${{ (amount * (1 + payoutRate)).toFixed(2) }}</span></div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="side-pane">
+        <!-- Positions Card with Tabs -->
+        <div class="card positions-card">
+          <div class="card-head tabs">
+            <button :class="['tab', currentTab === 'active' ? 'active' : '']" @click="currentTab = 'active'">
+              <Activity :size="14" /> Active ({{ activeOrders.length }})
+            </button>
+            <button :class="['tab', currentTab === 'recent' ? 'active' : '']" @click="currentTab = 'recent'">
+              <History :size="14" /> Recent ({{ orderHistory.length }})
+            </button>
+          </div>
+          <div class="card-body positions-body">
+            <div v-if="currentTab === 'active'">
+              <div v-if="activeOrders.length === 0" class="no-orders">
+                <Layers :size="48" stroke-width="1" />
+                <span>No active trades</span>
+              </div>
+              <div v-else class="order-item" v-for="order in activeOrders" :key="order.id">
+                <div class="order-header">
+                  <span class="symbol">{{ order.asset_symbol }}</span>
+                  <span :class="['direction', order.direction.toLowerCase()]">
+                    <component :is="order.direction === 'CALL' ? ArrowUpRight : ArrowDownRight" :size="16" />
+                    {{ order.direction }}
+                  </span>
+                </div>
+                <div class="order-details">
+                  <div>Entry: {{ formatPrice(order.open_price, order.asset_symbol) }}</div>
+                  <div>Amount: ${{ order.amount }}</div>
+                  <div class="timer"><Clock :size="12" /> {{ getTimeLeft(order) }}s</div>
+                  <div class="pnl" :class="getPnlClass(order)">
+                    Est. {{ getEstimatedPnl(order) }}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div v-else>
+              <div class="history-actions">
+                <label>Status</label>
+                <div class="select-wrapper-small">
+                  <select v-model="historyStatus">
+                    <option value="">All</option>
+                    <option value="won">Won</option>
+                    <option value="lost">Lost</option>
+                    <option value="draw">Draw</option>
+                  </select>
+                  <ChevronDown :size="12" class="arrow" />
+                </div>
+              </div>
+              <div v-if="orderHistory.length === 0" class="no-orders">
+                <History :size="48" stroke-width="1" />
+                <span>No history yet</span>
+              </div>
+              <div v-else class="order-item" v-for="order in orderHistory" :key="order.id">
+                <div class="order-header">
+                  <span class="symbol">{{ order.asset_symbol }}</span>
+                  <span class="status" :class="statusClass(order.status)">{{ order.status }}</span>
+                </div>
+                <div class="order-details">
+                  <div>
+                    <strong :class="['direction', order.direction.toLowerCase()]">
+                      {{ order.direction }}
+                    </strong>
+                  </div>
+                  <div>Entry: {{ formatPrice(order.open_price, order.asset_symbol) }}</div>
+                  <div>Exit: {{ order.close_price ? formatPrice(order.close_price, order.asset_symbol) : '--' }}</div>
+                  <div>Amount: ${{ order.amount }}</div>
+                  <div>PnL: <span :class="statusClass(order.status)">{{ formatPnl(order) }}</span></div>
+                  <div>{{ order.close_time ? new Date(order.close_time).toLocaleTimeString() : '--' }}</div>
+                </div>
+              </div>
+              <button v-if="orderHistory.length > 0 && marketStore.historyHasMore" class="load-more" @click="loadMoreHistory">
+                Load more
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1464,6 +1474,172 @@ const handleOutsideClick = (e) => {
   flex-direction: column;
   gap: 16px;
   min-height: 0;
+  position: relative;
+}
+
+/* Trade Ticket Floating Module */
+.trade-ticket-floating {
+  position: relative;
+  z-index: 10;
+}
+
+.ticket-content {
+  background: rgba(18, 20, 28, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 20px 24px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(20px);
+}
+
+.ticket-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.ticket-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.ticket-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.input-group-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.input-group-compact label {
+  font-size: 11px;
+  color: #8fa1c4;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.input-group-compact .input-wrapper {
+  position: relative;
+}
+
+.input-group-compact input,
+.input-group-compact select {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 10px 10px 10px 32px;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.input-group-compact input:focus,
+.input-group-compact select:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(93, 247, 194, 0.4);
+  outline: none;
+}
+
+.ticket-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ticket-actions .btn-call,
+.ticket-actions .btn-put {
+  border: none;
+  padding: 14px 20px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.ticket-actions .btn-call {
+  background: linear-gradient(135deg, #5df7c2 0%, #3dffb5 100%);
+  color: #0a0e14;
+  box-shadow: 0 4px 16px rgba(93, 247, 194, 0.3);
+}
+
+.ticket-actions .btn-call:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(93, 247, 194, 0.5);
+}
+
+.ticket-actions .btn-put {
+  background: linear-gradient(135deg, #ff7b7b 0%, #ff5b5b 100%);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(255, 123, 123, 0.3);
+}
+
+.ticket-actions .btn-put:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(255, 123, 123, 0.5);
+}
+
+.ticket-actions .btn-call:disabled,
+.ticket-actions .btn-put:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ticket-actions .btn-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+}
+
+.ticket-actions .payout {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.ticket-hint {
+  text-align: center;
+  font-size: 13px;
+  color: #8fa1c4;
+  font-weight: 500;
+}
+
+.ticket-hint .highlight {
+  color: #5df7c2;
+  font-weight: 700;
+}
+
+.ticket-content .alert {
+  padding: 10px 12px;
+  background: rgba(255, 123, 123, 0.1);
+  border: 1px solid rgba(255, 123, 123, 0.3);
+  border-radius: 8px;
+  color: #ff7b7b;
+  font-size: 12px;
+  margin-bottom: 12px;
+  font-weight: 500;
 }
 
 .chart-glass {
