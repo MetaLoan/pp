@@ -10,6 +10,77 @@
           <div class="tagline">High-frequency binary options terminal</div>
         </div>
       </div>
+      
+      <nav class="main-nav">
+        <button 
+          :class="['nav-item', { active: activeNavItem === 'trade' }]"
+          @click="activeNavItem = 'trade'"
+        >
+          <TrendingUp :size="20" />
+          <span>Trade</span>
+        </button>
+        
+        <button 
+          :class="['nav-item', { active: activeNavItem === 'finance' }]"
+          @click="activeNavItem = 'finance'"
+        >
+          <DollarSign :size="20" />
+          <span>Finance</span>
+        </button>
+        
+        <button 
+          :class="['nav-item', { active: activeNavItem === 'profile', 'has-badge': true }]"
+          @click="activeNavItem = 'profile'"
+        >
+          <User :size="20" />
+          <span>Profile</span>
+          <span class="nav-badge"></span>
+        </button>
+        
+        <button 
+          :class="['nav-item', { active: activeNavItem === 'market' }]"
+          @click="activeNavItem = 'market'"
+        >
+          <ShoppingCart :size="20" />
+          <span>Market</span>
+        </button>
+        
+        <button 
+          :class="['nav-item', { active: activeNavItem === 'achievements', 'has-badge': true }]"
+          @click="activeNavItem = 'achievements'"
+        >
+          <Gem :size="20" />
+          <span>Achievements</span>
+          <span class="nav-badge"></span>
+        </button>
+        
+        <button 
+          :class="['nav-item', { active: activeNavItem === 'contests' }]"
+          @click="activeNavItem = 'contests'"
+        >
+          <Trophy :size="20" />
+          <span>Contests</span>
+        </button>
+        
+        <button 
+          :class="['nav-item', { active: activeNavItem === 'chat', 'has-count': true }]"
+          @click="activeNavItem = 'chat'"
+        >
+          <MessageCircle :size="20" />
+          <span>Chat</span>
+          <span class="nav-count">5</span>
+        </button>
+        
+        <button 
+          :class="['nav-item', { active: activeNavItem === 'help', 'has-badge': true }]"
+          @click="activeNavItem = 'help'"
+        >
+          <HelpCircle :size="20" />
+          <span>Help</span>
+          <span class="nav-badge"></span>
+        </button>
+      </nav>
+      
       <div class="hero-right">
         <div class="balance-chip">
           <div class="balance-info">
@@ -467,7 +538,8 @@ import {
   ArrowUpRight, ArrowDownRight, History, Layers, Settings, Plus, Eraser, 
   RefreshCw, ChevronDown, BarChart2, LineChart, PieChart, ToggleLeft, ToggleRight,
   MoreHorizontal, PenTool, Grid, Sliders, X, Check, Star, Search,
-  Minus, MoreVertical, Menu, Fan, Maximize, Square, Move, GitBranch
+  Minus, MoreVertical, Menu, Fan, Maximize, Square, Move, GitBranch,
+  ShoppingCart, Award, Trophy, MessageCircle, HelpCircle, User, Gem
 } from 'lucide-vue-next';
 import { useMarketStore } from '../stores/market';
 import api from '../api/axios';
@@ -481,6 +553,7 @@ const isPriceUp = ref(true);
 const errorMsg = ref('');
 const currentTab = ref('active');
 const historyStatus = ref('');
+const activeNavItem = ref('trade');
 const depositAmount = ref(100);
 const withdrawAmount = ref(50);
 const fundsMsg = ref('');
@@ -1371,6 +1444,90 @@ const handleOutsideClick = (e) => {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(20px);
+  gap: 32px;
+}
+
+/* Main Navigation */
+.main-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  justify-content: center;
+}
+
+.nav-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  color: #8fa1c4;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.nav-item.active {
+  background: rgba(93, 247, 194, 0.1);
+  color: #5df7c2;
+}
+
+.nav-item.active:hover {
+  background: rgba(93, 247, 194, 0.15);
+}
+
+/* Navigation Badge (dot) */
+.nav-badge {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  width: 6px;
+  height: 6px;
+  background: #ef4444;
+  border-radius: 50%;
+  border: 1.5px solid rgba(11, 14, 20, 0.9);
+  animation: pulse-badge 2s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0);
+  }
+}
+
+/* Navigation Count */
+.nav-count {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid rgba(11, 14, 20, 0.9);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
 }
 
 .hero-left {
