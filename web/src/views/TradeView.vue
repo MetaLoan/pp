@@ -530,7 +530,7 @@
                   <span class="control-label">排序</span>
                   <select v-model="signalSortBy" class="control-select">
                     <option value="new">最新优先</option>
-                    <option value="confidence">信心度 ↓</option>
+                    <option value="confidence">趋势强度 ↓</option>
                     <option value="timing">时间框架</option>
                   </select>
                 </div>
@@ -562,36 +562,73 @@
               </div>
 
               <div class="signal-list">
-                <div v-for="sig in filteredSignals" :key="sig.title" :class="['signal-row', { 'signal-new': sig.isNew, 'signal-expired': !getSignalValidity(sig).isValid }]" @click="handleSignalTrade(sig)" @contextmenu.prevent="showSignalDetail = true; selectedSignal = sig">
-                  <div class="signal-meta">
-                    <div class="signal-header">
-                      <div class="signal-title">{{ sig.title }}</div>
-                      <div class="signal-meta-info">
-                        <span class="signal-time">{{ formatSignalTime(sig.createdAt) }}</span>
-                        <span class="signal-copies">📋 {{ sig.copied }}</span>
-                      </div>
-                    </div>
-                    <div class="signal-sub">{{ sig.metric }}</div>
-                    <div class="signal-confidence-arrows">
-                      <span class="confidence-arrows">{{ getConfidenceArrows(sig.confidence) }}</span>
+                <!-- Signal Table Header -->
+                <div class="signal-header-row">
+                  <div class="signal-cell symbol-cell">
+                    <span class="header-label">交易标的</span>
+                  </div>
+                  <div class="signal-cell trend-cell">
+                    <span class="header-label">趋势</span>
+                  </div>
+                  <div class="signal-cell action-cell">
+                    <span class="header-label">操作</span>
+                  </div>
+                  <div class="signal-cell expiry-cell">
+                    <span class="header-label">到期</span>
+                  </div>
+                  <div class="signal-cell time-cell">
+                    <span class="header-label">产生时间</span>
+                  </div>
+                </div>
+
+                <!-- Signal Rows -->
+                <div v-for="sig in filteredSignals" :key="sig.title" :class="['signal-row', { 'signal-expired': !getSignalValidity(sig).isValid }]">
+                  <!-- 交易标的 -->
+                  <div class="signal-cell symbol-cell">
+                    <span class="symbol-badge">{{ sig.symbol }}</span>
+                  </div>
+
+                  <!-- 趋势强度 -->
+                  <div class="signal-cell trend-cell">
+                    <div :class="['trend-indicator', { up: sig.confidence >= 0.5, down: sig.confidence < 0.5 }]">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline v-if="sig.confidence >= 0.5" points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                        <polyline v-else points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline>
+                      </svg>
+                      <span class="trend-text">{{ sig.confidence >= 0.5 ? '强' : '弱' }}</span>
                     </div>
                   </div>
-                  <div class="signal-actions">
-                    <div v-if="getSignalValidity(sig).isValid" class="validity-timer">
-                      <svg width="36" height="36" viewBox="0 0 36 36" style="transform: rotate(-90deg)">
-                        <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
-                        <circle cx="18" cy="18" r="16" fill="none" :stroke="sig.action === 'CALL' ? '#5df7c2' : '#ff7b7b'" stroke-width="2" 
-                          :style="{ strokeDasharray: `${getSignalValidity(sig).percent * 1.005} 100`, transition: 'stroke-dasharray 0.3s' }"/>
+
+                  <!-- 跟随按钮 -->
+                  <div class="signal-cell action-cell">
+                    <button 
+                      v-if="getSignalValidity(sig).isValid"
+                      :class="['btn-follow', sig.action === 'CALL' ? 'btn-call' : 'btn-put']" 
+                      @click="handleSignalTrade(sig)"
+                      :title="`跟随 ${sig.action} 信号`">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"></path>
                       </svg>
-                      <span class="timer-text">{{ Math.ceil(getSignalValidity(sig).remaining / 1000) }}s</span>
+                      跟随 {{ sig.action }}
+                    </button>
+                    <span v-else class="btn-expired">已过期</span>
+                  </div>
+
+                  <!-- 到期时间 -->
+                  <div class="signal-cell expiry-cell">
+                    <div v-if="getSignalValidity(sig).isValid" class="expiry-timer">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                      </svg>
+                      <span>{{ Math.ceil(getSignalValidity(sig).remaining / 1000) }}s</span>
                     </div>
-                    <span v-else class="pill pill-soft" style="opacity: 0.5">已过期</span>
-                    <button :class="['pill', 'signal-btn', sig.action === 'CALL' ? 'pill-green' : 'pill-red']" @click.stop="handleSignalTrade(sig)" :disabled="!getSignalValidity(sig).isValid">
-                      {{ sig.action }}
-                    </button>
-                    <button class="pill pill-soft signal-detail-btn" @click.stop="showSignalDetail = true; selectedSignal = sig" title="查看详情">
-                      ℹ
-                    </button>
+                    <span v-else class="expiry-badge expired">已过期</span>
+                  </div>
+
+                  <!-- 产生时间（相对时间） -->
+                  <div class="signal-cell time-cell">
+                    <span class="time-text">{{ formatSignalTime(sig.createdAt) }}</span>
                   </div>
                 </div>
                 <div v-if="filteredSignals.length === 0" class="signal-empty">
@@ -725,90 +762,6 @@
         </div>
 
         <!-- Signal Detail Modal -->
-        <div v-if="showSignalDetail && selectedSignal" class="modal-overlay" @click="showSignalDetail = false">
-          <div class="modal-card signal-detail-modal" @click.stop>
-            <div class="modal-header">
-              <h3>
-                <Antenna :size="20" /> {{ selectedSignal.title }}
-              </h3>
-              <button class="modal-close" @click="showSignalDetail = false">
-                <X :size="20" />
-              </button>
-            </div>
-            <div class="modal-body">
-              <div class="detail-grid">
-                <!-- 交易方向 -->
-                <div class="detail-item">
-                  <span class="detail-label">交易方向</span>
-                  <span :class="['detail-badge', selectedSignal.action === 'CALL' ? 'badge-call' : 'badge-put']">
-                    {{ selectedSignal.action }}
-                  </span>
-                </div>
-                
-                <!-- 技术指标 -->
-                <div class="detail-item">
-                  <span class="detail-label">技术指标</span>
-                  <span class="detail-value">{{ selectedSignal.metric }}</span>
-                </div>
-                
-                <!-- 信心度 -->
-                <div class="detail-item full-width">
-                  <span class="detail-label">信心度评分</span>
-                  <div class="confidence-display">
-                    <div class="confidence-bar-large">
-                      <span class="confidence-fill" :style="{ width: Math.round(selectedSignal.confidence * 100) + '%' }"></span>
-                    </div>
-                    <span class="confidence-percent">{{ Math.round(selectedSignal.confidence * 100) }}%</span>
-                  </div>
-                </div>
-                
-                <!-- 交易参数 -->
-                <div class="detail-item">
-                  <span class="detail-label">推荐金额</span>
-                  <span class="detail-value">{{ selectedSignal.amount }} USDT</span>
-                </div>
-                
-                <div class="detail-item">
-                  <span class="detail-label">推荐时长</span>
-                  <span class="detail-value">{{ selectedSignal.duration }}s</span>
-                </div>
-                
-                <!-- 时间框架 -->
-                <div class="detail-item">
-                  <span class="detail-label">时间框架</span>
-                  <span class="detail-value">{{ selectedSignal.timing }}</span>
-                </div>
-
-                <!-- 分析详情 -->
-                <div class="detail-item full-width">
-                  <span class="detail-label">分析详情</span>
-                  <div class="analysis-content">
-                    <div class="analysis-point">
-                      <span class="point-label">入场点位</span>
-                      <span class="point-value">当前价格 ± 0.5%</span>
-                    </div>
-                    <div class="analysis-point">
-                      <span class="point-label">止损位</span>
-                      <span class="point-value">-2.0% 风险控制</span>
-                    </div>
-                    <div class="analysis-point">
-                      <span class="point-label">目标位</span>
-                      <span class="point-value">+3.5% 预期收益</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="modal-footer">
-              <button class="btn-secondary" @click="showSignalDetail = false">关闭</button>
-              <button :class="['btn-primary', selectedSignal.action === 'CALL' ? 'btn-call' : 'btn-put']" 
-                @click="handleSignalTrade(selectedSignal); showSignalDetail = false">
-                执行 {{ selectedSignal.action }} 交易
-              </button>
-            </div>
-          </div>
-        </div>
-
         <!-- Deposit Modal -->
         <div v-if="showDepositModal" class="modal-overlay" @click="showDepositModal = false">
           <div class="modal-card" @click.stop>
@@ -884,8 +837,6 @@ const withdrawAmount = ref(50);
 const fundsMsg = ref('');
 const fundsError = ref('');
 const showDepositModal = ref(false);
-const showSignalDetail = ref(false);
-const selectedSignal = ref(null);
 const signalSortBy = ref('confidence'); // 'confidence' | 'timing' | 'new'
 const signalFilterAction = ref('all'); // 'all' | 'CALL' | 'PUT'
 const signalFilterTiming = ref('all'); // 'all' | '1m' | '2m' | '3m' | '4m' | '5m'
@@ -1208,18 +1159,6 @@ const getTrendArrows = (strength, direction) => {
   const arrowCount = strength >= 0.5 ? 2 : 1;
   const arrow = direction > 0 ? '↑' : '↓';
   return arrow.repeat(arrowCount);
-};
-
-// 将信心度转换为箭头数量（1-3个）
-const getConfidenceArrows = (confidence) => {
-  // confidence 范围 0-1
-  // 0-0.33 = 1个箭头
-  // 0.33-0.66 = 2个箭头
-  // 0.66-1 = 3个箭头
-  let arrowCount = 1;
-  if (confidence >= 0.66) arrowCount = 3;
-  else if (confidence >= 0.33) arrowCount = 2;
-  return '●'.repeat(arrowCount); // 使用圆点表示信心度
 };
 
 // Market Stats Calculations
@@ -3488,22 +3427,6 @@ const pushNewSignal = () => {
   color: #5df7c2;
 }
 
-/* Signal Confidence Arrows */
-.signal-confidence-arrows {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-}
-
-.confidence-arrows {
-  font-size: 12px;
-  color: #5df7c2;
-  font-weight: 700;
-  letter-spacing: 1px;
-}
-
-
 /* Signal Tabs (keep for backwards compatibility if needed) */
 .signal-tabs {
   display: flex;
@@ -3672,58 +3595,241 @@ const pushNewSignal = () => {
   color: #ff7b7b;
 }
 
+/* Signal Table Row - Compact Professional Design */
 .signal-row,
 .pending-row,
 .social-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  padding: 12px;
-  gap: 10px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: pointer;
+  background: rgba(255, 255, 255, 0.01);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 12px 16px;
+  gap: 16px;
+  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: default;
+}
+
+.signal-row:last-child {
+  border-bottom: none;
 }
 
 .signal-row:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(93, 247, 194, 0.3);
-  box-shadow: 0 4px 16px rgba(93, 247, 194, 0.1);
-  transform: translateY(-1px);
-}
-
-.signal-row.signal-new {
-  animation: signalPulse 0.5s ease-out;
-  background: rgba(93, 247, 194, 0.1);
-  border-color: rgba(93, 247, 194, 0.4);
+  background: rgba(93, 247, 194, 0.04);
 }
 
 .signal-row.signal-expired {
-  opacity: 0.6;
-  background: rgba(255, 255, 255, 0.02);
+  opacity: 0.5;
+  background: rgba(255, 255, 255, 0.01);
 }
 
-.signal-row.signal-expired .signal-btn {
+.signal-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+/* Symbol Cell */
+.symbol-cell {
+  justify-content: flex-start;
+}
+
+.symbol-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(93, 247, 194, 0.15), rgba(93, 247, 194, 0.05));
+  border: 1px solid rgba(93, 247, 194, 0.3);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-weight: 600;
+  color: #5df7c2;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+
+/* Trend Cell */
+.trend-cell {
+  justify-content: center;
+}
+
+.trend-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  transition: all 0.2s;
+}
+
+.trend-indicator.up {
+  color: #5df7c2;
+  background: rgba(93, 247, 194, 0.08);
+}
+
+.trend-indicator.down {
+  color: #ff7b7b;
+  background: rgba(255, 123, 123, 0.08);
+}
+
+.trend-indicator svg {
+  flex-shrink: 0;
+}
+
+.trend-text {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+/* Action Cell */
+.action-cell {
+  justify-content: center;
+}
+
+.btn-follow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-follow:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.btn-follow:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-follow:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-@keyframes signalPulse {
-  0% {
-    transform: translateX(-20px);
-    opacity: 0;
-    background: rgba(93, 247, 194, 0.2);
-  }
-  50% {
-    background: rgba(93, 247, 194, 0.15);
-  }
-  100% {
-    transform: translateX(0);
-    opacity: 1;
-    background: rgba(255, 255, 255, 0.03);
-  }
+.btn-follow.btn-call {
+  color: #5df7c2;
+  border-color: rgba(93, 247, 194, 0.5);
+  background: rgba(93, 247, 194, 0.05);
+}
+
+.btn-follow.btn-call:hover:not(:disabled) {
+  background: rgba(93, 247, 194, 0.1);
+  border-color: rgba(93, 247, 194, 0.8);
+  box-shadow: 0 2px 12px rgba(93, 247, 194, 0.2);
+}
+
+.btn-follow.btn-put {
+  color: #ff7b7b;
+  border-color: rgba(255, 123, 123, 0.5);
+  background: rgba(255, 123, 123, 0.05);
+}
+
+.btn-follow.btn-put:hover:not(:disabled) {
+  background: rgba(255, 123, 123, 0.1);
+  border-color: rgba(255, 123, 123, 0.8);
+  box-shadow: 0 2px 12px rgba(255, 123, 123, 0.2);
+}
+
+.btn-expired {
+  display: inline-flex;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(255, 123, 123, 0.08);
+  color: #ff7b7b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Expiry Cell */
+.expiry-cell {
+  justify-content: center;
+}
+
+.expiry-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #8fa1c4;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.expiry-timer svg {
+  color: #5df7c2;
+}
+
+.expiry-badge {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: rgba(255, 123, 123, 0.08);
+  color: #ff7b7b;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.expiry-badge.expired {
+  opacity: 0.7;
+}
+
+/* Time Cell */
+.time-cell {
+  justify-content: flex-end;
+  color: #8fa1c4;
+  font-size: 12px;
+}
+
+.time-text {
+  font-weight: 500;
+}
+
+/* Signal List Container */
+.signal-list {
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(93, 247, 194, 0.1);
+  overflow: hidden;
+}
+
+/* Signal Table Header */
+.signal-header-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 16px;
+  background: linear-gradient(90deg, rgba(93, 247, 194, 0.08), rgba(93, 247, 194, 0.03));
+  border-bottom: 1px solid rgba(93, 247, 194, 0.15);
+  font-size: 12px;
+  font-weight: 700;
+  color: #8fa1c4;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.header-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.8;
 }
 
 /* Signal Controls */
@@ -3834,183 +3940,9 @@ const pushNewSignal = () => {
   text-align: center;
 }
 
-/* Signal Row Content */
-.signal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
+/* Removed: Old Signal Row Content CSS - replaced with modern table design */
 
-.signal-meta-info {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.signal-time {
-  font-size: 10px;
-  color: #6b7a99;
-  white-space: nowrap;
-}
-
-.signal-copies {
-  font-size: 10px;
-  color: #8fa1c4;
-  white-space: nowrap;
-}
-
-/* Validity Timer */
-.validity-timer {
-  position: relative;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.validity-timer svg {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-}
-
-.timer-text {
-  position: relative;
-  z-index: 1;
-  font-size: 9px;
-  font-weight: 700;
-  color: #5df7c2;
-}
-
-.signal-meta,
-.pending-meta,
-.social-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
-}
-
-.signal-title,
-.pending-name,
-.social-name {
-  font-weight: 700;
-  color: #fff;
-}
-
-.signal-sub,
-.pending-sub,
-.social-sub {
-  font-size: 12px;
-  color: #8fa1c4;
-}
-
-.signal-confidence {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.confidence-bar {
-  flex: 1;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.confidence-fill {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, #3dffb5, #5df7c2);
-}
-
-.confidence-label {
-  font-size: 11px;
-  color: #5df7c2;
-  font-weight: 700;
-}
-
-.signal-actions,
-.pending-actions,
-.social-stats {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.pill {
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.06);
-  color: #d1d4dc;
-}
-
-.pill-green {
-  background: rgba(16, 185, 129, 0.16);
-  color: #5df7c2;
-  border-color: rgba(16, 185, 129, 0.3);
-}
-
-.pill-red {
-  background: rgba(239, 68, 68, 0.16);
-  color: #ff7b7b;
-  border-color: rgba(239, 68, 68, 0.3);
-}
-
-.pill-soft {
-  background: rgba(255, 255, 255, 0.05);
-  color: #8fa1c4;
-}
-
-.signal-btn {
-  background: none;
-  border: none;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.signal-btn.pill-green {
-  background: rgba(16, 185, 129, 0.16);
-  color: #5df7c2;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-}
-
-.signal-btn.pill-green:hover {
-  background: rgba(16, 185, 129, 0.28);
-  border-color: rgba(16, 185, 129, 0.5);
-  box-shadow: 0 0 12px rgba(93, 247, 194, 0.3);
-  transform: translateY(-1px);
-}
-
-.signal-btn.pill-red {
-  background: rgba(239, 68, 68, 0.16);
-  color: #ff7b7b;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-}
-
-.signal-btn.pill-red:hover {
-  background: rgba(239, 68, 68, 0.28);
-  border-color: rgba(239, 68, 68, 0.5);
-  box-shadow: 0 0 12px rgba(255, 123, 123, 0.3);
-  transform: translateY(-1px);
-}
+/* Removed old signal CSS - replaced with new table design */
 
 .avatar {
   width: 36px;
@@ -5001,146 +4933,6 @@ const pushNewSignal = () => {
 .btn-secondary:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
-}
-
-/* Signal Detail Modal Styles */
-.signal-detail-modal {
-  max-width: 600px;
-}
-
-.signal-detail-btn {
-  background: none !important;
-  border: none !important;
-  color: #8fa1c4;
-  padding: 4px 8px !important;
-  font-size: 14px !important;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.signal-detail-btn:hover {
-  color: #5df7c2 !important;
-  background: rgba(93, 247, 194, 0.1) !important;
-  border-radius: 6px;
-}
-
-.detail-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.detail-item {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.detail-item.full-width {
-  grid-column: 1 / -1;
-}
-
-.detail-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: #8fa1c4;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.detail-value {
-  font-size: 15px;
-  font-weight: 600;
-  color: #fff;
-}
-
-.detail-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  width: fit-content;
-}
-
-.detail-badge.badge-call {
-  background: rgba(16, 185, 129, 0.2);
-  color: #5df7c2;
-  border: 1px solid rgba(93, 247, 194, 0.3);
-}
-
-.detail-badge.badge-put {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ff7b7b;
-  border: 1px solid rgba(255, 123, 123, 0.3);
-}
-
-.confidence-display {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.confidence-bar-large {
-  flex: 1;
-  height: 12px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.confidence-bar-large .confidence-fill {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, #3dffb5, #5df7c2);
-  border-radius: 999px;
-  transition: width 0.3s ease;
-}
-
-.confidence-percent {
-  font-size: 14px;
-  font-weight: 700;
-  color: #5df7c2;
-  min-width: 40px;
-  text-align: right;
-}
-
-.analysis-content {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  background: rgba(93, 247, 194, 0.05);
-  border: 1px solid rgba(93, 247, 194, 0.1);
-  border-radius: 12px;
-  padding: 12px;
-}
-
-.analysis-point {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(93, 247, 194, 0.1);
-}
-
-.analysis-point:last-child {
-  border-bottom: none;
-}
-
-.point-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #8fa1c4;
-}
-
-.point-value {
-  font-size: 12px;
-  font-weight: 700;
-  color: #5df7c2;
 }
 
 .btn-call {
