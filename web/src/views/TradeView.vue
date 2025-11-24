@@ -313,20 +313,22 @@
               <div class="dock-divider"></div>
               
               <div class="ticket-actions">
-                <button class="btn-call" :disabled="!canTrade" @click="handleTrade('CALL')">
-                  <div class="btn-content">
-                    <ArrowUpRight :size="18" />
-                    <span>CALL</span>
+                <div class="action-group-compact">
+                  <div class="input-label">
+                    <Zap :size="16" class="label-icon" />
+                    <span>Direction</span>
                   </div>
-                  <span class="payout">{{ (payoutRate * 100).toFixed(0) }}%</span>
-                </button>
-                <button class="btn-put" :disabled="!canTrade" @click="handleTrade('PUT')">
-                  <div class="btn-content">
-                    <ArrowDownRight :size="18" />
-                    <span>PUT</span>
+                  <div class="action-buttons">
+                    <button class="btn-call" :disabled="!canTrade" @click="handleTrade('CALL')">
+                      <ArrowUpRight :size="16" />
+                      <span>CALL</span>
+                    </button>
+                    <button class="btn-put" :disabled="!canTrade" @click="handleTrade('PUT')">
+                      <ArrowDownRight :size="16" />
+                      <span>PUT</span>
+                    </button>
                   </div>
-                  <span class="payout">{{ (payoutRate * 100).toFixed(0) }}%</span>
-                </button>
+                </div>
               </div>
             </div>
             
@@ -1592,6 +1594,7 @@ const handleOutsideClick = (e) => {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   width: 100%;
+  height: 48px;
   box-sizing: border-box;
 }
 
@@ -1673,21 +1676,33 @@ const handleOutsideClick = (e) => {
 
 .ticket-actions {
   display: flex;
+  flex: 0 0 auto;
+}
+
+.action-group-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 320px;
+}
+
+.action-buttons {
+  display: flex;
   gap: 10px;
-  margin-bottom: 0;
+  width: 100%;
+  height: 48px;
+  box-sizing: border-box;
 }
 
 .ticket-actions .btn-call,
 .ticket-actions .btn-put {
+  flex: 1;
   border: none;
-  padding: 10px 28px;
-  border-radius: 14px;
+  border-radius: 12px;
   font-weight: 700;
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1695,6 +1710,10 @@ const handleOutsideClick = (e) => {
   white-space: nowrap;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  height: 100%;
+  padding: 0;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .ticket-actions .btn-call {
@@ -1725,17 +1744,6 @@ const handleOutsideClick = (e) => {
 .ticket-actions .btn-put:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-}
-
-.ticket-actions .btn-content {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-}
-
-.ticket-actions .payout {
-  display: none;
 }
 
 .ticket-hint {
