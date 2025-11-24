@@ -513,8 +513,35 @@
               <span><Antenna :size="14" /> 交易信号</span>
               <span class="badge accent">实时脉冲</span>
             </div>
+            
+            <!-- 信号控制栏 -->
+            <div class="signal-controls">
+              <div class="control-group">
+                <span class="control-label">排序</span>
+                <select v-model="signalSortBy" class="control-select">
+                  <option value="new">最新优先</option>
+                  <option value="confidence">信心度 ↓</option>
+                  <option value="timing">时间框架</option>
+                </select>
+              </div>
+              <div class="control-group">
+                <span class="control-label">筛选</span>
+                <div class="filter-buttons">
+                  <button :class="['filter-btn', { active: signalFilterAction === 'all' }]" @click="signalFilterAction = 'all'">
+                    全部
+                  </button>
+                  <button :class="['filter-btn', 'filter-call', { active: signalFilterAction === 'CALL' }]" @click="signalFilterAction = 'CALL'">
+                    CALL
+                  </button>
+                  <button :class="['filter-btn', 'filter-put', { active: signalFilterAction === 'PUT' }]" @click="signalFilterAction = 'PUT'">
+                    PUT
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div class="signal-list">
-              <div v-for="sig in signalFeed" :key="sig.title" :class="['signal-row', { 'signal-new': sig.isNew }]" @click="handleSignalTrade(sig)" @contextmenu.prevent="showSignalDetail = true; selectedSignal = sig">
+              <div v-for="sig in filteredSignals" :key="sig.title" :class="['signal-row', { 'signal-new': sig.isNew }]" @click="handleSignalTrade(sig)" @contextmenu.prevent="showSignalDetail = true; selectedSignal = sig">
                 <div class="signal-meta">
                   <div class="signal-title">{{ sig.title }}</div>
                   <div class="signal-sub">{{ sig.metric }}</div>
@@ -534,6 +561,10 @@
                   </button>
                   <span class="pill pill-soft">{{ sig.timing }}</span>
                 </div>
+              </div>
+              <div v-if="filteredSignals.length === 0" class="signal-empty">
+                <Antenna :size="32" />
+                <span>暂无符合条件的信号</span>
               </div>
             </div>
           </div>
@@ -786,6 +817,8 @@ const fundsError = ref('');
 const showDepositModal = ref(false);
 const showSignalDetail = ref(false);
 const selectedSignal = ref(null);
+const signalSortBy = ref('confidence'); // 'confidence' | 'timing' | 'new'
+const signalFilterAction = ref('all'); // 'all' | 'CALL' | 'PUT'
 const chartType = ref('line'); // line | area | candle
 const timeframe = ref(5); // seconds per bar
 const showSMA = ref(false);
@@ -932,6 +965,40 @@ const toggleFavorite = (symbol) => {
 
 // Update allowed symbols for the store
 const allowedSymbols = computed(() => tradingPairs.value.map(p => p.symbol));
+
+// 信号过滤和排序
+const filteredSignals = computed(() => {
+  let signals = signalFeed.value;
+
+  // 按交易方向过滤
+  if (signalFilterAction.value !== 'all') {
+    signals = signals.filter(s => s.action === signalFilterAction.value);
+  }
+
+  // 按条件排序
+  const sorted = [...signals];
+  switch (signalSortBy.value) {
+    case 'confidence':
+      // 从高到低排序
+      sorted.sort((a, b) => b.confidence - a.confidence);
+      break;
+    case 'timing':
+      // 时间框架排序(数字小的在前)
+      const timingOrder = { '1m': 1, '2m': 2, '3m': 3, '4m': 4, '5m': 5 };
+      sorted.sort((a, b) => {
+        const aVal = timingOrder[a.timing] || 999;
+        const bVal = timingOrder[b.timing] || 999;
+        return aVal - bVal;
+      });
+      break;
+    case 'new':
+      // 新信号优先
+      sorted.sort((a, b) => (b.isNew ? 1 : 0) - (a.isNew ? 1 : 0));
+      break;
+  }
+
+  return sorted;
+});
 
 // Configuration Lists
 const timeframesConfig = [
@@ -3178,6 +3245,114 @@ const pushNewSignal = () => {
     opacity: 1;
     background: rgba(255, 255, 255, 0.03);
   }
+}
+
+/* Signal Controls */
+.signal-controls {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: rgba(93, 247, 194, 0.05);
+  border: 1px solid rgba(93, 247, 194, 0.1);
+  border-radius: 12px;
+  flex-wrap: wrap;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.control-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #8fa1c4;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.control-select {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.control-select:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(93, 247, 194, 0.3);
+}
+
+.control-select:focus {
+  outline: none;
+  background: rgba(93, 247, 194, 0.1);
+  border-color: rgba(93, 247, 194, 0.5);
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.filter-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #8fa1c4;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.filter-btn.active {
+  background: rgba(93, 247, 194, 0.2);
+  color: #5df7c2;
+  border-color: rgba(93, 247, 194, 0.4);
+}
+
+.filter-btn.filter-call {
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.filter-btn.filter-call.active {
+  background: rgba(16, 185, 129, 0.2);
+  color: #5df7c2;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.filter-btn.filter-put {
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.filter-btn.filter-put.active {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ff7b7b;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.signal-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  color: #6b7a99;
+  text-align: center;
 }
 
 .signal-meta,
