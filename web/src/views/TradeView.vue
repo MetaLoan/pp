@@ -1664,53 +1664,46 @@ const renderCandles = (updatePrice = true) => {
     `${candles[candles.length - 1].time}:${candles[candles.length - 1].close}:${candles.length}` : 
     null;
   
-  if (lastRenderedCandlesHash === currentHash) {
-    return; // Data unchanged, skip processing
+  if (lastRenderedCandlesHash === currentHash && lastRenderedCandleCount > 0) {
+    // Data unchanged and already initialized, skip processing
+    return;
   }
   lastRenderedCandlesHash = currentHash;
 
-  // Sanitize only the last candle (for quick sync check)
-  const lastC = candles[candles.length - 1];
-  const lastCandle = {
-    time: Number(lastC.time),
-    open: Number(lastC.open),
-    high: Number(lastC.high),
-    low: Number(lastC.low),
-    close: Number(lastC.close),
-  };
+  // Sanitize all candles
+  const sanitized = candles
+    .map((c) => ({
+      time: Number(c.time),
+      open: Number(c.open),
+      high: Number(c.high),
+      low: Number(c.low),
+      close: Number(c.close),
+    }))
+    .filter((c) => Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close));
 
-  if (!Number.isFinite(lastCandle.time) || !Number.isFinite(lastCandle.close)) {
-    return; // Invalid data
-  }
+  const byTime = new Map();
+  for (const c of sanitized) byTime.set(c.time, c);
+  const uniq = Array.from(byTime.values()).sort((a, b) => a.time - b.time);
 
-  // Check if we're out of sync with the server
-  if (lastCandle.time > lastRenderedCandleTime) {
-    // Server has new candles we haven't rendered yet
-    // Full re-render needed to catch up
-    const sanitized = candles
-      .map((c) => ({
-        time: Number(c.time),
-        open: Number(c.open),
-        high: Number(c.high),
-        low: Number(c.low),
-        close: Number(c.close),
-      }))
-      .filter((c) => Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close));
+  if (uniq.length === 0) return;
 
-    const byTime = new Map();
-    for (const c of sanitized) byTime.set(c.time, c);
-    const uniq = Array.from(byTime.values()).sort((a, b) => a.time - b.time);
+  const lastCandle = uniq[uniq.length - 1];
 
-    if (uniq.length > 0) {
-      series.setData(uniq);
-      lastRenderedCandleCount = uniq.length;
-      lastRenderedCandleTime = uniq[uniq.length - 1].time;
-      currentBar = { ...uniq[uniq.length - 1] };
-      interpolatedPrice.value = currentBar.close;
-    }
+  // First load or significant change: use setData to replace everything
+  if (lastRenderedCandleCount === 0 || uniq.length !== lastRenderedCandleCount) {
+    series.setData(uniq);
+    lastRenderedCandleCount = uniq.length;
+    lastRenderedCandleTime = lastCandle.time;
+    currentBar = { ...lastCandle };
+    interpolatedPrice.value = lastCandle.close;
+  } else if (lastCandle.time > lastRenderedCandleTime) {
+    // New candle(s) added: use update for smooth transition
+    series.update(lastCandle);
+    lastRenderedCandleTime = lastCandle.time;
+    currentBar = { ...lastCandle };
+    interpolatedPrice.value = lastCandle.close;
   } else if (lastCandle.time === lastRenderedCandleTime) {
-    // Current candle: server might have a slightly different OHLC than our local tick calc
-    // Sync it only if it's significantly different (prevents constant micro-syncs)
+    // Current candle being updated: sync if significantly different
     const diff = Math.abs(lastCandle.close - currentBar.close);
     if (diff > Math.abs(currentBar.close) * 0.001) { // More than 0.1% difference
       series.update(lastCandle);
@@ -1727,16 +1720,6 @@ const renderCandles = (updatePrice = true) => {
 
   // Update moving averages if needed
   if (smaSeries || emaSeries) {
-    const sanitized = candles
-      .map((c) => ({
-        time: Number(c.time),
-        open: Number(c.open),
-        high: Number(c.high),
-        low: Number(c.low),
-        close: Number(c.close),
-      }))
-      .filter((c) => Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close));
-
     if (smaSeries) {
       const data = showSMA.value ? computeSMA(sanitized, smaPeriod.value) : [];
       smaSeries.setData(data);
@@ -1863,6 +1846,9 @@ watch(
   () => {
     marketStore.setTimeframe(timeframe.value);
     currentBar = null; // Reset current bar on timeframe change
+    lastRenderedCandleTime = 0; // Reset rendered state
+    lastRenderedCandleCount = 0;
+    lastRenderedCandlesHash = null; // Reset cache
     refreshCandles();
     if (chartType.value !== 'candle') {
       applyHistoryToSeries(marketStore.priceHistory);
