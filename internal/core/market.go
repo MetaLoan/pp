@@ -172,6 +172,34 @@ func (m *MarketEngine) pollPrices() {
 				price = last.Price
 			}
 			now := time.Now().UnixMilli()
+			// Anomaly detection: if the new price differs from last cached price
+			// by more than 5% in a single tick, treat it as anomalous and ignore it.
+			var lastPriceVal float64
+			m.mu.RLock()
+			if last, ok := m.lastPrice[sym]; ok {
+				lastPriceVal = last.Price
+			}
+			m.mu.RUnlock()
+			if lastPriceVal > 0 {
+				pct := (price - lastPriceVal) / lastPriceVal
+				if pct > 0.05 || pct < -0.05 {
+					// Log anomaly and write to anomalies.log for inspection
+					log.Printf("[anomaly] symbol=%s last=%.8f new=%.8f pct=%.6f - ignoring tick", sym, lastPriceVal, price, pct)
+					// append to anomalies.log
+					func() {
+						f, err := os.OpenFile("anomalies.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+						if err != nil {
+							log.Printf("failed to open anomalies.log: %v", err)
+							return
+						}
+						defer f.Close()
+						t := time.Now().Format(time.RFC3339)
+						_, _ = f.WriteString(fmt.Sprintf("%s symbol=%s last=%.8f new=%.8f pct=%.6f\n", t, sym, lastPriceVal, price, pct))
+					}()
+					// skip this tick
+					continue
+				}
+			}
 			if last, ok := lastTS[sym]; ok && now <= last {
 				now = last + 1
 			}
