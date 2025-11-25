@@ -539,7 +539,7 @@
                   <span class="control-label">排序</span>
                   <select v-model="signalSortBy" class="control-select">
                     <option value="new">最新优先</option>
-                    <option value="confidence">趋势强度 ↓</option>
+                    <option value="copiers">跟单人数 ↓</option>
                     <option value="timing">时间框架</option>
                   </select>
                 </div>
@@ -561,12 +561,12 @@
 
               <div class="signal-list">
                 <!-- Signal Rows (Header Removed) -->
-                <div v-for="sig in filteredSignals" :key="sig.title" :class="['signal-row', { 'signal-expired': !getSignalValidity(sig).isValid }]">
+                <div v-for="sig in filteredSignals" :key="sig.id" :class="['signal-row', { 'signal-expired': !getSignalValidity(sig).isValid }]">
                   <!-- 交易标的 + 复制人数角标 -->
                   <div class="signal-cell symbol-cell">
                     <div class="symbol-wrapper">
                       <div class="copies-badge-small">
-                        <Users :size="10" /> {{ sig.followers }}
+                        <Users :size="10" /> {{ sig.copiers }}
                       </div>
                       <span class="symbol-text">{{ sig.symbol }}</span>
                     </div>
@@ -800,7 +800,7 @@ const withdrawAmount = ref(50);
 const fundsMsg = ref('');
 const fundsError = ref('');
 const showDepositModal = ref(false);
-const signalSortBy = ref('confidence'); // 'confidence' | 'timing' | 'new'
+const signalSortBy = ref('new'); // 'copiers' | 'timing' | 'new'
 const signalFilterAction = ref('all'); // 'all' | 'CALL' | 'PUT'
 const signalFilterTiming = ref('all'); // 'all' | '1m' | '2m' | '3m' | '4m' | '5m'
 const chartType = ref('candle'); // line | area | candle
@@ -909,44 +909,12 @@ const generateM30TestSignals = () => {
     { symbol: 'NFLX' },
   ];
   
-  const signalTitles = [
-    '突破', '反弹', '加速', '回调', '强势', '弱势', '盘整', '加仓', '获利',
-    '冲高', '探底', '缩量', '放量', '修复', '衰竭', '启动', '转折', '蓄势', '狂欢'
-  ];
-  
-  const metrics = [
-    'RSI 指标强势',
-    'MACD 金叉',
-    'MA 均线突破',
-    'Stoch 信号',
-    'CCI 极值',
-    'ATR 突破',
-    'Volume 突增',
-    '布林突破',
-    'Trend 确认',
-    '支撑反弹',
-    '阻力突破',
-    '角度强势',
-    '分时强力',
-    '级别共振',
-    '多空转变',
-    '确认有效',
-    '信心强势',
-    '破位启动',
-    '连续突破',
-    '黄金位置'
-  ];
-  
   // 为每个交易对和时间框架生成20条信号
   for (let i = 0; i < 20; i++) {
     const randomSymbol = tradingPairsList[Math.floor(Math.random() * tradingPairsList.length)];
-    const titleIndex = i % signalTitles.length;
-    const metricIndex = (i + Math.floor(Math.random() * metrics.length)) % metrics.length;
     
     const signal = {
-      title: `${randomSymbol.symbol} ${signalTitles[titleIndex]}`,
-      metric: metrics[metricIndex],
-      confidence: 0.6 + Math.random() * 0.35, // 0.6 - 0.95
+      id: `sig-${now}-${i}`,
       action: actions[Math.floor(Math.random() * actions.length)],
       timing: 'm30',
       symbol: randomSymbol.symbol,
@@ -954,8 +922,7 @@ const generateM30TestSignals = () => {
       strength: Math.random() > 0.5 ? 2 : 1,
       amount: Math.floor(Math.random() * 150) + 25, // 25 - 175
       duration: 1800 + Math.floor(Math.random() * 1800), // 30m - 60m (1800s - 3600s)
-      followers: Math.floor(Math.random() * 1900) + 100,
-      copied: Math.floor(Math.random() * 15),
+      copiers: Math.floor(Math.random() * 1900) + 100,
       createdAt: now - i * 60000, // 每条间隔1分钟
       validity: 1800000 + Math.floor(Math.random() * 1800000), // 30m - 60m
       expiryTime: now - i * 60000 + (1800000 + Math.floor(Math.random() * 1800000)),
@@ -996,8 +963,8 @@ const getTrendForPair = (symbol) => {
   }
   
   // 找复制人数最多的有效信号
-  const maxCopied = Math.max(...validSignals.map(s => s.copied));
-  const topSignals = validSignals.filter(s => s.copied === maxCopied);
+  const maxCopied = Math.max(...validSignals.map(s => s.copiers));
+  const topSignals = validSignals.filter(s => s.copiers === maxCopied);
   
   // 如果并列，选第一个（最新的）
   const selectedSignal = topSignals[0];
@@ -1016,10 +983,8 @@ const filteredSignals = computed(() => {
     .filter(s => s.symbol === selectedSymbol.value)
     .filter(s => signalFilterAction.value === 'all' || s.action === signalFilterAction.value)
     .sort((a, b) => {
-      if (signalSortBy.value === 'confidence') {
-        return b.confidence - a.confidence;
-      } else if (signalSortBy.value === 'followers') {
-        return b.followers - a.followers;
+      if (signalSortBy.value === 'copiers') {
+        return b.copiers - a.copiers;
       } else {
         return b.createdAt - a.createdAt;
       }
@@ -1205,7 +1170,9 @@ const settings = ref({
 });
 
 let currentBar = null; // { time, open, high, low, close }
+let lastCompletedBar = null; // The last fully completed bar from local ticks
 let lastRenderedCandlesHash = null; // Cache to avoid re-processing same data
+const renderedCandlesMap = new Map(); // Cache rendered candles to prevent minor flickering
 
 let chart;
 let series;
@@ -1489,6 +1456,9 @@ const processTick = (price, time) => {
   let isNewBar = false;
   if (!currentBar || barTime > currentBar.time) {
     // New bar timeframe - create new bar
+    if (currentBar) {
+      lastCompletedBar = { ...currentBar };
+    }
     isNewBar = true;
     currentBar = {
       time: barTime,
@@ -1609,6 +1579,13 @@ const computeEMA = (data, period) => {
 const applyHistoryToSeries = (history, updatePrice = true) => {
   if (!series || history.length === 0) return;
   if (chartType.value === 'candle') return; // handled by candles fetch
+  
+  // If we have candle data, prefer using that for the chart history
+  // as it provides a longer and more consistent timeframe.
+  // Only use priceHistory as a fallback when candles are missing.
+  if (marketStore.candles && marketStore.candles.length > 0) {
+    return;
+  }
 
   const data = resampleHistory(history, timeframe.value);
   if (data.length === 0) return;
@@ -1682,7 +1659,37 @@ const renderCandles = (updatePrice = true) => {
     .filter((c) => Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close));
 
   const byTime = new Map();
-  for (const c of sanitized) byTime.set(c.time, c);
+  
+  // Smart merge: prefer existing rendered candles if difference is negligible
+  // This prevents history flickering (e.g. 3rd last candle changing)
+  for (const c of sanitized) {
+    const existing = renderedCandlesMap.get(c.time);
+    
+    // Strict stability mode:
+    // If we already have a rendered candle for this time, and it's a historical candle (not the current one),
+    // we strictly keep the local version to prevent ANY flickering or rollback caused by backend sync issues.
+    if (existing && currentBar && c.time < currentBar.time) {
+      byTime.set(c.time, existing);
+      continue;
+    }
+    
+    // Update or add new candle
+    byTime.set(c.time, c);
+    renderedCandlesMap.set(c.time, c);
+  }
+
+  // Merge local lastCompletedBar to prevent previous candle flicker/rollback
+  if (lastCompletedBar) {
+    byTime.set(lastCompletedBar.time, { ...lastCompletedBar });
+    renderedCandlesMap.set(lastCompletedBar.time, { ...lastCompletedBar });
+  }
+
+  // Merge local currentBar to prevent rollback/flicker
+  if (currentBar) {
+    byTime.set(currentBar.time, { ...currentBar });
+    // Do not cache currentBar in renderedCandlesMap as it is still changing
+  }
+
   const uniq = Array.from(byTime.values()).sort((a, b) => a.time - b.time);
 
   if (uniq.length === 0) return;
@@ -1771,10 +1778,56 @@ const createSeries = () => {
   lastRenderedCandleCount = 0;
 };
 
+const renderLineChart = () => {
+  if (!series || (chartType.value !== 'line' && chartType.value !== 'area')) return;
+
+  const candles = marketStore.candles || [];
+  if (candles.length === 0) {
+    // Fallback to priceHistory if no candles available
+    applyHistoryToSeries(marketStore.priceHistory);
+    return;
+  }
+
+  // Convert candles to line data
+  const lineData = candles
+    .map(c => ({ time: Number(c.time), value: Number(c.close) }))
+    .sort((a, b) => a.time - b.time)
+    .filter(item => Number.isFinite(item.time) && Number.isFinite(item.value));
+
+  // Merge currentBar if exists and is newer
+  if (currentBar) {
+    const lastTime = lineData.length > 0 ? lineData[lineData.length - 1].time : 0;
+    if (currentBar.time > lastTime) {
+      lineData.push({ time: currentBar.time, value: currentBar.close });
+    } else if (currentBar.time === lastTime && lineData.length > 0) {
+      lineData[lineData.length - 1].value = currentBar.close;
+    }
+  }
+
+  if (lineData.length === 0) return;
+
+  series.setData(lineData);
+
+  // Update indicators based on candles (more accurate than ticks)
+  if (smaSeries) {
+    const data = showSMA.value ? computeSMA(candles, smaPeriod.value) : [];
+    smaSeries.setData(data);
+  }
+  if (emaSeries) {
+    const data = showEMA.value ? computeEMA(candles, smaPeriod.value) : [];
+    emaSeries.setData(data);
+  }
+};
+
 const refreshCandles = async () => {
-  if (chartType.value !== 'candle') return;
+  // Always fetch candles regardless of chart type to ensure consistent history
   await marketStore.fetchCandles({ symbol: selectedSymbol.value, interval: timeframe.value, limit: 300 });
-  renderCandles();
+  
+  if (chartType.value === 'candle') {
+    renderCandles();
+  } else {
+    renderLineChart();
+  }
 };
 
 const fetchHistory = async (reset = true) => {
@@ -1805,7 +1858,9 @@ watch(
     marketStore.setSymbol(selectedSymbol.value);
     
     interpolatedPrice.value = 0;
+    lastCompletedBar = null;
     lastRenderedCandlesHash = null; // Reset cache when symbol changes
+    renderedCandlesMap.clear(); // Clear local cache
     if (series) {
       createSeries();
     }
@@ -1821,6 +1876,9 @@ watch(
     }
     marketStore.fetchActiveOrders();
     fetchHistory(true);
+    // Reset local bars when symbol changes
+    currentBar = null;
+    lastCompletedBar = null;
     refreshCandles();
   }
 );
@@ -1846,9 +1904,11 @@ watch(
   () => {
     marketStore.setTimeframe(timeframe.value);
     currentBar = null; // Reset current bar on timeframe change
+    lastCompletedBar = null;
     lastRenderedCandleTime = 0; // Reset rendered state
     lastRenderedCandleCount = 0;
     lastRenderedCandlesHash = null; // Reset cache
+    renderedCandlesMap.clear(); // Clear local cache
     refreshCandles();
     if (chartType.value !== 'candle') {
       applyHistoryToSeries(marketStore.priceHistory);
@@ -1903,12 +1963,8 @@ watch(
   () => chartType.value,
   () => {
     createSeries();
-    // render from either candles or tick history
-    if (chartType.value === 'candle') {
-      refreshCandles();
-    } else {
-      applyHistoryToSeries(marketStore.priceHistory);
-    }
+    // Always refresh candles to ensure we have data for all chart types
+    refreshCandles();
     updateTimeScale();
   }
 );

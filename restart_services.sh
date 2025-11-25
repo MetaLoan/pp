@@ -30,6 +30,31 @@ kill_port 3000 "Frontend"
 # Wait a moment to ensure ports are freed
 sleep 2
 
+# 1.5 Clean up data
+echo -e "\n${GREEN}Step 1.5: Cleaning up data and logs...${NC}"
+rm -f *.log
+rm -f anomalies.log
+echo "Logs cleaned."
+
+# Clean up Redis (if running in docker)
+if docker ps | grep -q pp-redis; then
+    echo "Cleaning Redis..."
+    docker exec pp-redis redis-cli FLUSHALL > /dev/null 2>&1
+    echo "Redis cache cleared."
+else
+    echo "Redis container (pp-redis) not found, skipping."
+fi
+
+# Clean up Postgres (if running in docker)
+if docker ps | grep -q pp-postgres; then
+    echo "Cleaning Database..."
+    # Truncate all tables
+    docker exec pp-postgres psql -U postgres -d pp_db -c "TRUNCATE TABLE users, wallets, orders, wallet_ledgers, settlement_logs RESTART IDENTITY CASCADE;" > /dev/null 2>&1
+    echo "Database tables truncated."
+else
+    echo "Postgres container (pp-postgres) not found, skipping."
+fi
+
 # 2. Restart services
 echo -e "\n${GREEN}Step 2: Starting services...${NC}"
 

@@ -74,13 +74,15 @@ func InitMarket() {
 	if mockInit == nil {
 		mockInit = map[string]float64{}
 	}
-	// Set all allowed symbols to a fixed opening price of 10000 per request
+	// Set default opening price for symbols not in mockInit
 	symbols := config.GlobalConfig.Trading.AllowedSymbols
 	if len(symbols) == 0 {
 		symbols = []string{"EURUSD"}
 	}
 	for _, sym := range symbols {
-		mockInit[sym] = 10000
+		if _, ok := mockInit[sym]; !ok {
+			mockInit[sym] = 10000
+		}
 	}
 	cb := market.NewCircuitBreaker(cfg.Breaker.FailThreshold, cfg.Breaker.OpenSeconds)
 	var provider market.PriceProvider
