@@ -1222,6 +1222,7 @@ let drawingMode = false;
 const interpolatedPrice = ref(0);
 let animationFrameId = null;
 let lastRenderedCandleCount = 0;
+let lastRenderedCandleTime = 0;
 
 const currentPrice = computed(() => interpolatedPrice.value || marketStore.currentPrice);
 const activeOrders = computed(() => marketStore.activeOrders);
@@ -1499,14 +1500,25 @@ const processTick = (price, time) => {
   }
 
   if (series) {
-    const item = chartType.value === 'candle' 
-      ? currentBar 
-      : { time: currentBar.time, value: currentBar.close };
-      
-    try {
-      series.update(item);
-    } catch (e) {
-      // ignore time order errors
+    if (chartType.value === 'candle') {
+      const item = currentBar;
+      // Only update the forming/most-recent candle. Do not overwrite already-closed candles
+      if (lastRenderedCandleTime === 0 || item.time >= lastRenderedCandleTime) {
+        try {
+          series.update(item);
+        } catch (e) {
+          // ignore time order errors
+        }
+      } else {
+        // ignore updates to older buckets
+      }
+    } else {
+      const item = { time: currentBar.time, value: currentBar.close };
+      try {
+        series.update(item);
+      } catch (e) {
+        // ignore time order errors
+      }
     }
   }
 };
@@ -1644,29 +1656,42 @@ const renderCandles = (updatePrice = true) => {
       low: Number(c.low),
       close: Number(c.close),
     }))
-    .filter((c) => Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close))
-    .sort((a, b) => a.time - b.time);
+    .filter((c) => Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close));
+
+  // Deduplicate by time keeping the last occurrence for each timestamp, then sort ascending
+  const byTime = new Map();
+  for (const c of sanitized) byTime.set(c.time, c);
+  const uniq = Array.from(byTime.values()).sort((a, b) => a.time - b.time);
 
   if (updatePrice) {
     // Debug info to help diagnose cases where only 1-2 candles render
     // eslint-disable-next-line no-console
-    console.debug('[renderCandles] count:', sanitized.length, 'first:', sanitized[0], 'last:', sanitized[sanitized.length - 1], 'lastRendered:', lastRenderedCandleCount);
+    console.debug('[renderCandles] count:', uniq.length, 'first:', uniq[0], 'last:', uniq[uniq.length - 1], 'lastRendered:', lastRenderedCandleCount, 'lastRenderedTime:', lastRenderedCandleTime);
 
     // If we haven't rendered before, or we have a reasonably-sized dataset, replace full data.
     // Otherwise, when backend occasionally returns very small arrays (1-2 candles), just update the latest candle
     // to avoid collapsing the chart to a couple of bars.
-    if (lastRenderedCandleCount === 0 || sanitized.length >= 3) {
-      series.setData(sanitized);
-      lastRenderedCandleCount = sanitized.length;
+    if (lastRenderedCandleCount === 0 || uniq.length >= 3) {
+      series.setData(uniq);
+      lastRenderedCandleCount = uniq.length;
+      lastRenderedCandleTime = uniq[uniq.length - 1]?.time || lastRenderedCandleTime;
     } else {
-      // sanitized.length is 1 or 2 but we previously had more candles: update only the latest point
-      const last = sanitized[sanitized.length - 1];
+      // uniq.length is 1 or 2 but we previously had more candles: update only the latest point
+      const last = uniq[uniq.length - 1];
       if (last) {
         try {
-          series.update(last);
+          // Only update if this timestamp is the current (>= lastRenderedCandleTime) to avoid rewriting closed candles
+          if (last.time >= lastRenderedCandleTime) {
+            series.update(last);
+            lastRenderedCandleTime = Math.max(lastRenderedCandleTime, last.time);
+          } else {
+            // Ignore older timestamps
+            console.debug('[renderCandles] ignoring older candle update', last.time, 'currentLast', lastRenderedCandleTime);
+          }
         } catch (e) {
           // Fallback to setData if update fails for any reason
-          series.setData(sanitized);
+          series.setData(uniq);
+          lastRenderedCandleTime = uniq[uniq.length - 1]?.time || lastRenderedCandleTime;
         }
       }
       // keep lastRenderedCandleCount unchanged (we don't shrink history here)
