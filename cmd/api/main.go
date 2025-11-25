@@ -26,7 +26,7 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.Default()
-	
+
 	// Add CORS Middleware
 	r.Use(handler.CORSMiddleware())
 
@@ -66,6 +66,8 @@ func main() {
 
 		// Public market data
 		api.GET("/market/candles", marketHandler.GetCandles)
+		// Debug: current last price for a symbol
+		api.GET("/market/price", marketHandler.GetPrice)
 	}
 
 	// WebSocket Route
