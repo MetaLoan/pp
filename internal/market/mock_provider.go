@@ -25,25 +25,16 @@ func NewMockProvider(initial map[string]float64) *MockProvider {
 
 func (m *MockProvider) tick() {
 	// Reduce tick frequency to 1s to lower simulated update rate
-	ticker := time.NewTicker(1 * time.Second)
+	// Tick every 200ms as requested (0.2s)
+	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	for range ticker.C {
 		m.mu.Lock()
 		for sym, price := range m.prices {
-			// Increased volatility for faster price movement simulation
-			step := (rand.Float64() - 0.5)
-			switch sym {
-			case "EURUSD", "EUR/USD":
-				price += step * 0.0005
-			case "BTCUSDT", "BTC/USD":
-				price += step * 50.0
-			case "ETHUSDT", "ETH/USD":
-				price += step * 5.0
-			case "S1":
-				price += step * 2.0
-			default:
-				price += step * 0.01 // Reduced default volatility
-			}
+			// Apply a small random percentage change +/-0.005% per tick
+			// 0.005% = 0.00005 in decimal
+			pct := (rand.Float64()*2 - 1) * 0.00005
+			price += price * pct
 			m.prices[sym] = price
 		}
 		m.mu.Unlock()
@@ -67,16 +58,6 @@ func (m *MockProvider) GetPrice(symbol string) (float64, error) {
 }
 
 func SeedForSymbol(symbol string) float64 {
-	switch symbol {
-	case "BTCUSDT", "BTC/USD", "BTCUSDC":
-		return 65000 + (rand.Float64()-0.5)*500
-	case "ETHUSDT", "ETH/USD", "ETHUSDC":
-		return 3200 + (rand.Float64()-0.5)*50
-	case "S1":
-		return 100 + (rand.Float64()-0.5)*10
-	case "EURUSD":
-		return 1.05 + (rand.Float64()-0.5)*0.01
-	default:
-		return 1.0 + rand.Float64()*0.05
-	}
+	// Use 10000 as the seed for all symbols per request
+	return 10000
 }
