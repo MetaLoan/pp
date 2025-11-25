@@ -1860,8 +1860,10 @@ const animatePrice = () => {
     }
   }
 
-  // Update chart with interpolated price
-  processTick(interpolatedPrice.value, Date.now() / 1000);
+  // Use server tick time when available to align candle bucket calculation
+  const tickTime = marketStore.currentTickTime || Math.floor(Date.now() / 1000);
+  // Update chart with interpolated price using server timestamp
+  processTick(interpolatedPrice.value, tickTime);
 
   animationFrameId = requestAnimationFrame(animatePrice);
 };

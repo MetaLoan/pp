@@ -24,6 +24,7 @@ export const useMarketStore = defineStore('market', {
     selectedSymbol: 'EURUSD',
     currentPrice: 0,
     priceHistory: [], // Array of { time, value } for chart
+    currentTickTime: null,
     isConnected: false,
     socket: null,
     mockInterval: null, // 本地模拟价格定时器
@@ -82,6 +83,9 @@ export const useMarketStore = defineStore('market', {
           // Convert timestamp to seconds for lightweight-charts
           // Ensure integer seconds to avoid sub-second issues with standard scale
           const time = Math.floor(data.timestamp / 1000);
+
+          // expose latest tick time for consumers (seconds)
+          this.currentTickTime = time;
 
           // Avoid duplicates if we get multiple updates in same second
           if (this.priceHistory.length > 0) {
