@@ -154,6 +154,11 @@
 
           <div class="chart-wrapper">
             <div class="chart-surface" ref="chartContainer"></div>
+            <canvas
+              ref="drawingOverlay"
+              class="drawing-overlay"
+              :class="{ active: !!drawingState.tool }"
+            ></canvas>
             <div class="chart-overlay bottom">
               <div class="market-stats">
                 <div class="stat-item" :class="marketStats.change >= 0 ? 'up' : 'down'">
@@ -296,19 +301,102 @@
 
               <!-- Indicators Content -->
               <div v-if="activeMenu === 'indicators'" class="indicators-menu-content">
-                <div class="indicators-grid">
-                  <div 
-                    v-for="ind in indicatorsList" 
-                    :key="ind" 
-                    class="indicator-item"
-                    @click="
-                      ind === 'Moving Average' ? (showSMA = !showSMA) : 
-                      ind === 'Exponential Moving Average' ? (showEMA = !showEMA) : null
-                    "
+                <div class="indicator-accordion">
+                  <div
+                    v-for="indicator in indicatorsCatalog"
+                    :key="indicator.id"
+                    class="indicator-accordion-item"
+                    :class="{
+                      disabled: !indicator.supported,
+                      open: selectedIndicatorId === indicator.id,
+                    }"
                   >
-                    <div class="star-icon">☆</div>
-                    <span>{{ ind }}</span>
-                    <div v-if="(ind === 'Moving Average' && showSMA) || (ind === 'Exponential Moving Average' && showEMA)" class="active-dot"></div>
+                    <button
+                      class="indicator-row"
+                      @click="selectIndicator(indicator.id)"
+                    >
+                      <div class="indicator-meta">
+                        <div class="indicator-title">{{ indicator.label }}</div>
+                      </div>
+                      <div class="indicator-row-actions">
+                        <template v-if="indicator.supported">
+                          <div
+                            class="indicator-toggle"
+                            :class="{ on: isIndicatorActive(indicator.id) }"
+                            @click.stop="toggleIndicator(indicator.id)"
+                          >
+                            <div class="indicator-toggle-handle"></div>
+                          </div>
+                        </template>
+                        <span v-else class="indicator-chip">Soon</span>
+                        <ChevronDown
+                          :size="16"
+                          class="accordion-arrow"
+                          :class="{ rotated: selectedIndicatorId === indicator.id }"
+                        />
+                      </div>
+                    </button>
+
+                    <transition name="accordion">
+                      <div
+                        v-if="selectedIndicatorId === indicator.id"
+                        class="indicator-detail-panel"
+                      >
+                        <div v-if="indicator.supported">
+                          <div
+                            v-if="isIndicatorActive(indicator.id)"
+                            class="settings-form"
+                          >
+                            <div
+                              v-for="control in indicator.settingsSchema"
+                              :key="`${indicator.id}-${control.key}`"
+                              class="setting-control"
+                            >
+                              <label :for="`${indicator.id}-${control.key}`">{{ control.label }}</label>
+
+                              <input
+                                v-if="control.type === 'number'"
+                                :id="`${indicator.id}-${control.key}`"
+                                type="number"
+                                :min="control.min"
+                                :max="control.max"
+                                :step="control.step || 1"
+                                :value="getIndicatorSetting(indicator.id, control.key)"
+                                @input="handleIndicatorSettingChange(indicator.id, control.key, $event.target.value)"
+                              />
+
+                              <select
+                                v-else-if="control.type === 'select'"
+                                :id="`${indicator.id}-${control.key}`"
+                                :value="getIndicatorSetting(indicator.id, control.key)"
+                                @change="handleIndicatorSettingChange(indicator.id, control.key, $event.target.value)"
+                              >
+                                <option
+                                  v-for="option in control.options"
+                                  :key="option.value"
+                                  :value="option.value"
+                                >
+                                  {{ option.label }}
+                                </option>
+                              </select>
+                            </div>
+
+                            <button
+                              class="settings-reset"
+                              @click="resetIndicatorSettings(indicator.id)"
+                            >
+                              重置为默认值
+                            </button>
+                          </div>
+                          <div v-else class="settings-placeholder">
+                            开启该指标以自定义参数
+                          </div>
+                        </div>
+                        <div v-else class="settings-placeholder">
+                          该指标正在开发中，敬请期待。
+                        </div>
+                      </div>
+                    </transition>
                   </div>
                 </div>
               </div>
@@ -316,9 +404,13 @@
               <!-- Drawing Tools Content -->
               <div v-if="activeMenu === 'drawing'" class="drawing-menu-content">
                 <div class="drawing-actions">
-                  <button class="action-btn primary" @click="startDrawing('trend')">
-                    <Plus :size="16" />
-                    <span>Start Drawing</span>
+                  <button
+                    class="action-btn"
+                    :class="isDrawingMode ? 'danger' : 'primary'"
+                    @click="toggleDrawingButton"
+                  >
+                    <component :is="isDrawingMode ? X : Plus" :size="16" />
+                    <span>{{ isDrawingMode ? 'End Drawing' : 'Start Drawing' }}</span>
                   </button>
                   <button class="action-btn secondary" @click="clearDrawings">
                     <Eraser :size="16" />
@@ -326,12 +418,11 @@
                   </button>
                 </div>
                 <div class="menu-divider"></div>
-                <div class="menu-label">Drawing Tools</div>
                 <div class="tools-grid">
                   <button 
                     v-for="tool in drawingTools" 
                     :key="tool.id" 
-                    class="tool-grid-item"
+                    :class="['tool-grid-item', { active: drawingState.tool === tool.id }]"
                     @click="startDrawing(tool.id)"
                     :title="tool.label"
                   >
@@ -771,25 +862,26 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { createChart, LineSeries, AreaSeries, CandlestickSeries } from 'lightweight-charts';
 import { 
   Wallet, Activity, Zap, TrendingUp, TrendingDown, Clock, DollarSign, 
   ArrowUpRight, ArrowDownRight, History, Layers, Settings, Plus, Eraser, 
   RefreshCw, ChevronDown, BarChart2, LineChart, PieChart, ToggleLeft, ToggleRight,
   MoreHorizontal, PenTool, Grid, Sliders, X, Check, Star, Search,
-  Minus, MoreVertical, Menu, Fan, Maximize, Square, Move, GitBranch,
+  Minus, MoreVertical, Square,
   ShoppingCart, Award, Trophy, MessageCircle, HelpCircle, User, Gem,
   Antenna, Users, Target, Hourglass, Keyboard
 } from 'lucide-vue-next';
 import { useMarketStore } from '../stores/market';
 import api from '../api/axios';
+import { getIndicatorDefaults, indicatorsCatalog, sanitizeCandles } from '../utils/indicators';
 
 const chartContainer = ref(null);
 const marketStore = useMarketStore();
 
 const amount = ref(10);
-const duration = ref(30);
+const duration = ref(60);
 const isPriceUp = ref(true);
 const errorMsg = ref('');
 const currentTab = ref('active');
@@ -805,10 +897,157 @@ const signalFilterAction = ref('all'); // 'all' | 'CALL' | 'PUT'
 const signalFilterTiming = ref('all'); // 'all' | '1m' | '2m' | '3m' | '4m' | '5m'
 const chartType = ref('candle'); // line | area | candle
 const timeframe = ref(60); // seconds per bar (default M1)
-const showSMA = ref(false);
-const showEMA = ref(false);
-const smaPeriod = ref(10);
 const timeframeOptions = [1, 5, 15, 30, 60, 300, 600]; // Keep for logic mapping
+
+const indicatorSeriesMap = new Map();
+const activeIndicators = reactive({});
+const selectedIndicatorId = ref(
+  indicatorsCatalog.find((indicator) => indicator.supported)?.id || null
+);
+
+const selectIndicator = (indicatorId) => {
+  selectedIndicatorId.value =
+    selectedIndicatorId.value === indicatorId ? null : indicatorId;
+};
+
+const isIndicatorActive = (indicatorId) => Boolean(activeIndicators[indicatorId]);
+
+const getIndicatorSetting = (indicatorId, key) => {
+  const indicator = indicatorsCatalog.find((item) => item.id === indicatorId);
+  const state = activeIndicators[indicatorId];
+  if (state?.settings && state.settings[key] !== undefined) {
+    return state.settings[key];
+  }
+  return indicator ? getIndicatorDefaults(indicator)[key] : '';
+};
+
+const ensureIndicatorSeries = (indicator) => {
+  if (!chart) return {};
+  if (!indicatorSeriesMap.has(indicator.id)) {
+    indicatorSeriesMap.set(indicator.id, {});
+  }
+  const collection = indicatorSeriesMap.get(indicator.id);
+  indicator.seriesConfigs?.forEach((config) => {
+    if (!collection[config.id]) {
+      const options = {
+        color: config.color || '#fff',
+        lineWidth: config.lineWidth || 1,
+        priceScaleId: config.priceScaleId || 'right',
+        priceFormat: config.priceFormat || undefined,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      };
+      if (config.type === 'AreaSeries') {
+        collection[config.id] = chart.addSeries(AreaSeries, options);
+      } else {
+        collection[config.id] = chart.addSeries(LineSeries, options);
+      }
+      if (config.scaleMargins) {
+        chart.priceScale(config.priceScaleId || 'right').applyOptions({
+          scaleMargins: config.scaleMargins,
+          borderVisible: false,
+        });
+      }
+    }
+  });
+  return collection;
+};
+
+const removeIndicatorSeries = (indicatorId) => {
+  const seriesCollection = indicatorSeriesMap.get(indicatorId);
+  if (seriesCollection && chart) {
+    Object.values(seriesCollection).forEach((indicatorSeries) => {
+      chart.removeSeries(indicatorSeries);
+    });
+  }
+  indicatorSeriesMap.delete(indicatorId);
+  delete activeIndicators[indicatorId];
+};
+
+const clearAllIndicatorSeries = () => {
+  indicatorSeriesMap.forEach((collection) => {
+    Object.values(collection).forEach((indicatorSeries) => {
+      chart?.removeSeries(indicatorSeries);
+    });
+  });
+  indicatorSeriesMap.clear();
+  Object.keys(activeIndicators).forEach((key) => {
+    delete activeIndicators[key];
+  });
+};
+
+const updateIndicatorSeries = (indicatorId) => {
+  const indicator = indicatorsCatalog.find((item) => item.id === indicatorId);
+  const state = activeIndicators[indicatorId];
+  if (!indicator || !indicator.supported || !state || !chart || !series) return;
+
+  const candles = sanitizeCandles(marketStore.candles || []);
+  if (!candles.length) return;
+
+  const result = indicator.compute(candles, state.settings) || {};
+  const seriesCollection = ensureIndicatorSeries(indicator);
+
+  Object.entries(result).forEach(([seriesId, data]) => {
+    if (seriesCollection[seriesId]) {
+      seriesCollection[seriesId].setData(data);
+    }
+  });
+};
+
+const updateAllIndicators = () => {
+  Object.keys(activeIndicators).forEach((indicatorId) => {
+    updateIndicatorSeries(indicatorId);
+  });
+};
+
+const toggleIndicator = (indicatorId) => {
+  const indicator = indicatorsCatalog.find((item) => item.id === indicatorId);
+  if (!indicator || !indicator.supported) return;
+
+  if (isIndicatorActive(indicatorId)) {
+    removeIndicatorSeries(indicatorId);
+    nextTick(() => requestOverlayRender());
+    return;
+  }
+
+  activeIndicators[indicatorId] = {
+    settings: getIndicatorDefaults(indicator),
+  };
+  nextTick(() => {
+    updateIndicatorSeries(indicatorId);
+    requestOverlayRender();
+  });
+};
+
+const handleIndicatorSettingChange = (indicatorId, key, rawValue) => {
+  const indicator = indicatorsCatalog.find((item) => item.id === indicatorId);
+  const state = activeIndicators[indicatorId];
+  if (!indicator || !state) return;
+
+  const field = indicator.settingsSchema?.find((schema) => schema.key === key);
+  if (!field) return;
+
+  let value = field.type === 'number' ? Number(rawValue) : rawValue;
+  if (field.type === 'number' && Number.isNaN(value)) return;
+  if (field.min !== undefined) value = Math.max(field.min, value);
+  if (field.max !== undefined) value = Math.min(field.max, value);
+
+  state.settings = {
+    ...state.settings,
+    [key]: value,
+  };
+
+  updateIndicatorSeries(indicatorId);
+};
+
+const resetIndicatorSettings = (indicatorId) => {
+  const indicator = indicatorsCatalog.find((item) => item.id === indicatorId);
+  const state = activeIndicators[indicatorId];
+  if (!indicator || !state) return;
+
+  state.settings = getIndicatorDefaults(indicator);
+  updateIndicatorSeries(indicatorId);
+};
 
 // 时间框架标签到秒数的映射
 const timeframeMap = {
@@ -1143,24 +1382,33 @@ const timeframesConfig = [
   { label: 'H4', value: 14400 }, { label: 'D1', value: 86400 }
 ];
 
-const indicatorsList = [
-  'Accelerator Oscillator', 'ADX', 'Aroon', 'ATR', 'Bear Power', 'Bollinger Bands', 
-  'Bull Power', 'CCI', 'DeMarker', 'Envelopes', 'Exponential Moving Average', 'Fractal Chaos Bands', 'Ichimoku Kinko Hyo',
-  'MACD', 'Momentum', 'Moving Average', 'OsMA', 'Parabolic SAR', 'RSI', 'Stochastic',
-  'SuperTrend', 'Vortex', 'Williams %R', 'Zig Zag'
-];
-
 const drawingTools = [
   { id: 'horizontal', label: 'Horizontal Line', icon: Minus },
   { id: 'vertical', label: 'Vertical Line', icon: MoreVertical },
-  { id: 'ray', label: 'Ray', icon: ArrowUpRight },
-  { id: 'fib_retrace', label: 'Fibonacci Retracement', icon: Menu },
-  { id: 'fib_fan', label: 'Fibonacci Fan', icon: Fan },
   { id: 'trend', label: 'Trend Line', icon: TrendingUp },
-  { id: 'channel', label: 'Parallel Channel', icon: Maximize },
   { id: 'rect', label: 'Rectangle', icon: Square },
-  { id: 'pitchfork', label: "Andrew's Pitchfork", icon: GitBranch },
 ];
+
+const drawingOverlay = ref(null);
+const drawingState = reactive({
+  tool: null,
+  shapes: [],
+  draft: null,
+  isDrawing: false,
+});
+
+const isDrawingMode = computed(() => Boolean(drawingState.tool));
+
+const drawingColors = {
+  trend: '#5df7c2',
+  horizontal: '#fde047',
+  vertical: '#f472b6',
+  rect: '#60a5fa',
+};
+
+let overlayCtx = null;
+let overlayResizeObserver;
+let overlayRenderFrame = null;
 
 // Settings State
 const settings = ref({
@@ -1176,16 +1424,12 @@ const renderedCandlesMap = new Map(); // Cache rendered candles to prevent minor
 
 let chart;
 let series;
-let smaSeries;
-let emaSeries;
 let resizeObserver;
 let timerInterval;
 let historyInterval;
 let candleInterval;
 let signalInterval;
 let trendRefreshInterval; // 趋势刷新定时器
-let drawings = [];
-let drawingMode = false;
 
 const interpolatedPrice = ref(0);
 let animationTimer = null; // interval id for 200ms price updates
@@ -1609,14 +1853,8 @@ const applyHistoryToSeries = (history, updatePrice = true) => {
     }
   }
 
-  if (smaSeries) {
-    const data = showSMA.value ? computeSMA(lineData, smaPeriod.value) : [];
-    smaSeries.setData(data);
-  }
-  if (emaSeries) {
-    const data = showEMA.value ? computeEMA(lineData, smaPeriod.value) : [];
-    emaSeries.setData(data);
-  }
+  updateAllIndicators();
+  requestOverlayRender();
 };
 
 const renderCandles = (updatePrice = true) => {
@@ -1725,22 +1963,13 @@ const renderCandles = (updatePrice = true) => {
     isPriceUp.value = last.close >= prev.close;
   }
 
-  // Update moving averages if needed
-  if (smaSeries || emaSeries) {
-    if (smaSeries) {
-      const data = showSMA.value ? computeSMA(sanitized, smaPeriod.value) : [];
-      smaSeries.setData(data);
-    }
-    if (emaSeries) {
-      const data = showEMA.value ? computeEMA(sanitized, smaPeriod.value) : [];
-      emaSeries.setData(data);
-    }
-  }
-
   // Ensure animation timer is running
   try {
     startAnimationTimerIfNeeded();
   } catch (e) {}
+
+  updateAllIndicators();
+  requestOverlayRender();
 };
 
 const createSeries = () => {
@@ -1749,33 +1978,22 @@ const createSeries = () => {
     chart.removeSeries(series);
     series = null;
   }
-  if (smaSeries) {
-    chart.removeSeries(smaSeries);
-    smaSeries = null;
-  }
-  if (emaSeries) {
-    chart.removeSeries(emaSeries);
-    emaSeries = null;
-  }
+  clearAllIndicatorSeries();
   lastRenderedCandlesHash = null; // Reset cache when creating new series
   const baseOptions = {
     priceFormat: { type: 'price', precision: pricePrecision.value, minMove: 1 / Math.pow(10, pricePrecision.value) },
   };
   if (chartType.value === 'candle') {
     series = chart.addSeries(CandlestickSeries, {});
-    smaSeries = chart.addSeries(LineSeries, { color: '#ffeb3b', lineWidth: 1, ...baseOptions });
-    emaSeries = chart.addSeries(LineSeries, { color: '#ff9800', lineWidth: 1, ...baseOptions });
   } else if (chartType.value === 'area') {
     series = chart.addSeries(AreaSeries, { lineColor: '#4caf50', topColor: 'rgba(76,175,80,0.3)', bottomColor: 'rgba(76,175,80,0.05)', ...baseOptions });
-    smaSeries = chart.addSeries(LineSeries, { color: '#ffeb3b', lineWidth: 1, ...baseOptions });
-    emaSeries = chart.addSeries(LineSeries, { color: '#ff9800', lineWidth: 1, ...baseOptions });
   } else {
     series = chart.addSeries(LineSeries, { color: '#2962FF', lineWidth: 2, ...baseOptions });
-    smaSeries = chart.addSeries(LineSeries, { color: '#ffeb3b', lineWidth: 1, ...baseOptions });
-    emaSeries = chart.addSeries(LineSeries, { color: '#ff9800', lineWidth: 1, ...baseOptions });
   }
   // reset last rendered count when recreating series (e.g. on symbol or chart type change)
   lastRenderedCandleCount = 0;
+  updateAllIndicators();
+  requestOverlayRender();
 };
 
 const renderLineChart = () => {
@@ -1807,16 +2025,8 @@ const renderLineChart = () => {
   if (lineData.length === 0) return;
 
   series.setData(lineData);
-
-  // Update indicators based on candles (more accurate than ticks)
-  if (smaSeries) {
-    const data = showSMA.value ? computeSMA(candles, smaPeriod.value) : [];
-    smaSeries.setData(data);
-  }
-  if (emaSeries) {
-    const data = showEMA.value ? computeEMA(candles, smaPeriod.value) : [];
-    emaSeries.setData(data);
-  }
+  updateAllIndicators();
+  requestOverlayRender();
 };
 
 const refreshCandles = async () => {
@@ -1915,7 +2125,18 @@ watch(
     }
     restartCandleInterval();
     updateTimeScale();
+    updateAllIndicators();
+    requestOverlayRender();
   }
+);
+
+watch(
+  () => marketStore.candles,
+  () => {
+    updateAllIndicators();
+    requestOverlayRender();
+  },
+  { deep: true }
 );
 
 const animatePriceTick = () => {
@@ -1966,17 +2187,6 @@ watch(
     // Always refresh candles to ensure we have data for all chart types
     refreshCandles();
     updateTimeScale();
-  }
-);
-
-watch(
-  () => [showSMA.value, showEMA.value, smaPeriod.value],
-  () => {
-    if (chartType.value === 'candle') {
-      renderCandles(false);
-    } else {
-      applyHistoryToSeries(marketStore.priceHistory, false);
-    }
   }
 );
 
@@ -2033,6 +2243,7 @@ onMounted(async () => {
     if (width > 0 && height > 0) chart.applyOptions({ width, height });
   });
   resizeObserver.observe(chartContainer.value);
+  setupOverlay();
 
   marketStore.connect();
   marketStore.fetchActiveOrders();
@@ -2081,15 +2292,6 @@ onMounted(async () => {
   // Animation timer will be started once candles are rendered (see renderCandles())
   // to avoid racing the initial candle dataset load. Use startAnimationTimerIfNeeded().
 
-  chart.subscribeClick((param) => {
-    if (!drawingMode) return;
-    const price = currentPrice.value || (param.seriesData && param.seriesData.get(series)?.close);
-    if (!price) return;
-    const line = series.createPriceLine({ price, color: '#ffa500', lineWidth: 1 });
-    drawings.push(line);
-    drawingMode = false;
-  });
-
   window.addEventListener('resize', handleResize);
 });
 
@@ -2105,6 +2307,8 @@ onUnmounted(() => {
   clearInterval(animationTimer);
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
   window.removeEventListener('resize', handleResize);
+  teardownOverlay();
+  clearAllIndicatorSeries();
   clearDrawings();
 });
 
@@ -2116,6 +2320,8 @@ const handleResize = () => {
     });
     updateTimeScale();
   }
+  resizeOverlayCanvas();
+  requestOverlayRender();
 };
 
 const restartCandleInterval = () => {
@@ -2163,16 +2369,281 @@ const handleDeposit = async () => {
 };
 
 const startDrawing = (toolId = 'trend') => {
-  drawingMode = true;
-  // In a real implementation, we would set the specific tool type here
-  console.log('Starting drawing with tool:', toolId);
+  drawingState.tool = toolId;
+  drawingState.draft = null;
+  drawingState.isDrawing = false;
+  requestOverlayRender();
 };
 
 const clearDrawings = () => {
-  if (drawings.length && series) {
-    drawings.forEach((l) => series.removePriceLine(l));
-    drawings = [];
+  drawingState.shapes = [];
+  drawingState.draft = null;
+  drawingState.isDrawing = false;
+  requestOverlayRender();
+};
+
+const exitDrawingMode = () => {
+  drawingState.tool = null;
+  drawingState.draft = null;
+  drawingState.isDrawing = false;
+  requestOverlayRender();
+};
+
+const toggleDrawingButton = () => {
+  if (isDrawingMode.value) {
+    exitDrawingMode();
+  } else {
+    startDrawing('trend');
   }
+};
+
+const pointerToChartPoint = (event) => {
+  if (!drawingOverlay.value || !chart || !series) return null;
+  const rect = drawingOverlay.value.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+  const time = chart.timeScale().coordinateToTime(x);
+  const price = typeof series.coordinateToPrice === 'function'
+    ? series.coordinateToPrice(y)
+    : chart.priceScale('right')?.coordinateToPrice(y);
+
+  if (time === undefined || price === undefined || price === null) {
+    return null;
+  }
+  return { time, price };
+};
+
+const priceToY = (price) => {
+  if (!series) return null;
+  if (typeof series.priceToCoordinate === 'function') {
+    return series.priceToCoordinate(price);
+  }
+  const scale = chart?.priceScale('right');
+  return scale?.priceToCoordinate(price) ?? null;
+};
+
+const timeToX = (time) => {
+  return chart?.timeScale().timeToCoordinate(time) ?? null;
+};
+
+const normalizeShape = (draft) => {
+  const color = drawingColors[draft.type] || drawingColors.trend;
+  if (draft.type === 'horizontal') {
+    return draft.start
+      ? { type: 'horizontal', price: draft.end?.price ?? draft.start.price, color }
+      : null;
+  }
+  if (draft.type === 'vertical') {
+    return draft.start
+      ? { type: 'vertical', time: draft.end?.time ?? draft.start.time, color }
+      : null;
+  }
+  if (draft.type === 'rect') {
+    if (!draft.start || !draft.end) return null;
+    return { type: 'rect', start: draft.start, end: draft.end, color };
+  }
+  if (!draft.start || !draft.end) return null;
+  return { type: 'trend', start: draft.start, end: draft.end, color };
+};
+
+const drawShape = (shape) => {
+  if (!overlayCtx || !drawingOverlay.value) return;
+  overlayCtx.save();
+  overlayCtx.lineWidth = shape.isDraft ? 1 : 1.5;
+  overlayCtx.strokeStyle = shape.color || drawingColors.trend;
+  overlayCtx.fillStyle = 'rgba(96,165,250,0.08)';
+  overlayCtx.setLineDash(shape.isDraft ? [6, 4] : []);
+
+  if (shape.type === 'horizontal') {
+    const y = priceToY(shape.price);
+    if (y !== null && y !== undefined) {
+      overlayCtx.beginPath();
+      overlayCtx.moveTo(0, y);
+      overlayCtx.lineTo(drawingOverlay.value.clientWidth, y);
+      overlayCtx.stroke();
+    }
+    overlayCtx.restore();
+    return;
+  }
+
+  if (shape.type === 'vertical') {
+    const x = timeToX(shape.time);
+    if (x !== null && x !== undefined) {
+      overlayCtx.beginPath();
+      overlayCtx.moveTo(x, 0);
+      overlayCtx.lineTo(x, drawingOverlay.value.clientHeight);
+      overlayCtx.stroke();
+    }
+    overlayCtx.restore();
+    return;
+  }
+
+  if (shape.type === 'rect') {
+    const startX = timeToX(shape.start.time);
+    const endX = timeToX(shape.end.time);
+    const startY = priceToY(shape.start.price);
+    const endY = priceToY(shape.end.price);
+    if (
+      startX !== null && startX !== undefined &&
+      endX !== null && endX !== undefined &&
+      startY !== null && startY !== undefined &&
+      endY !== null && endY !== undefined
+    ) {
+      const x = Math.min(startX, endX);
+      const y = Math.min(startY, endY);
+      const width = Math.abs(endX - startX);
+      const height = Math.abs(endY - startY);
+      overlayCtx.beginPath();
+      overlayCtx.rect(x, y, width, height);
+      overlayCtx.stroke();
+      overlayCtx.globalAlpha = 0.2;
+      overlayCtx.fillRect(x, y, width, height);
+    }
+    overlayCtx.restore();
+    return;
+  }
+
+  const startX = timeToX(shape.start.time);
+  const startY = priceToY(shape.start.price);
+  const endX = timeToX(shape.end.time);
+  const endY = priceToY(shape.end.price);
+
+  if (
+    startX !== null && startX !== undefined &&
+    endX !== null && endX !== undefined &&
+    startY !== null && startY !== undefined &&
+    endY !== null && endY !== undefined
+  ) {
+    overlayCtx.beginPath();
+    overlayCtx.moveTo(startX, startY);
+    overlayCtx.lineTo(endX, endY);
+    overlayCtx.stroke();
+  }
+  overlayCtx.restore();
+};
+
+const renderOverlay = () => {
+  overlayRenderFrame = null;
+  if (!overlayCtx || !drawingOverlay.value) return;
+  const canvas = drawingOverlay.value;
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  overlayCtx.clearRect(0, 0, width, height);
+
+  drawingState.shapes.forEach((shape) => drawShape(shape));
+  if (drawingState.draft) {
+    drawShape({ ...drawingState.draft, isDraft: true });
+  }
+};
+
+const requestOverlayRender = () => {
+  if (!overlayCtx) return;
+  if (overlayRenderFrame) cancelAnimationFrame(overlayRenderFrame);
+  overlayRenderFrame = requestAnimationFrame(renderOverlay);
+};
+
+const resizeOverlayCanvas = () => {
+  if (!drawingOverlay.value || !chartContainer.value) return;
+  const canvas = drawingOverlay.value;
+  const dpr = window.devicePixelRatio || 1;
+  const { clientWidth, clientHeight } = chartContainer.value;
+  canvas.width = clientWidth * dpr;
+  canvas.height = clientHeight * dpr;
+  canvas.style.width = `${clientWidth}px`;
+  canvas.style.height = `${clientHeight}px`;
+  overlayCtx = overlayCtx || canvas.getContext('2d');
+  overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  requestOverlayRender();
+};
+
+const handlePointerDown = (event) => {
+  if (!drawingState.tool) return;
+  const point = pointerToChartPoint(event);
+  if (!point) return;
+  drawingState.isDrawing = true;
+  drawingState.draft = { type: drawingState.tool, start: point, end: point };
+  drawingOverlay.value?.setPointerCapture?.(event.pointerId);
+  event.preventDefault();
+  requestOverlayRender();
+};
+
+const handlePointerMove = (event) => {
+  if (!drawingState.isDrawing || !drawingState.draft) return;
+  const point = pointerToChartPoint(event);
+  if (!point) return;
+  drawingState.draft.end = point;
+  requestOverlayRender();
+};
+
+const handlePointerUp = (event) => {
+  if (!drawingState.isDrawing || !drawingState.draft) return;
+  const point = pointerToChartPoint(event);
+  if (point) {
+    drawingState.draft.end = point;
+  }
+  const shape = normalizeShape(drawingState.draft);
+  if (shape) {
+    drawingState.shapes.push(shape);
+  }
+  drawingState.isDrawing = false;
+  drawingState.draft = null;
+  drawingOverlay.value?.releasePointerCapture?.(event.pointerId);
+  requestOverlayRender();
+};
+
+let timeRangeHandler = null;
+let logicalRangeHandler = null;
+const subscribeOverlayToChart = () => {
+  if (!chart) return;
+  const timeScale = chart.timeScale();
+  timeRangeHandler = () => requestOverlayRender();
+  logicalRangeHandler = () => requestOverlayRender();
+  timeScale.subscribeVisibleTimeRangeChange(timeRangeHandler);
+  timeScale.subscribeVisibleLogicalRangeChange(logicalRangeHandler);
+};
+
+const unsubscribeOverlayFromChart = () => {
+  if (!chart) return;
+  const timeScale = chart.timeScale();
+  if (timeRangeHandler) {
+    timeScale.unsubscribeVisibleTimeRangeChange(timeRangeHandler);
+    timeRangeHandler = null;
+  }
+  if (logicalRangeHandler) {
+    timeScale.unsubscribeVisibleLogicalRangeChange(logicalRangeHandler);
+    logicalRangeHandler = null;
+  }
+};
+
+const setupOverlay = () => {
+  if (!drawingOverlay.value) return;
+  resizeOverlayCanvas();
+  drawingOverlay.value.addEventListener('pointerdown', handlePointerDown);
+  drawingOverlay.value.addEventListener('pointermove', handlePointerMove);
+  window.addEventListener('pointerup', handlePointerUp);
+  overlayResizeObserver = new ResizeObserver(resizeOverlayCanvas);
+  if (chartContainer.value) {
+    overlayResizeObserver.observe(chartContainer.value);
+  }
+  subscribeOverlayToChart();
+};
+
+const teardownOverlay = () => {
+  if (drawingOverlay.value) {
+    drawingOverlay.value.removeEventListener('pointerdown', handlePointerDown);
+    drawingOverlay.value.removeEventListener('pointermove', handlePointerMove);
+  }
+  window.removeEventListener('pointerup', handlePointerUp);
+  if (overlayResizeObserver && chartContainer.value) {
+    overlayResizeObserver.unobserve(chartContainer.value);
+  }
+  overlayResizeObserver = null;
+  unsubscribeOverlayFromChart();
+  if (overlayRenderFrame) {
+    cancelAnimationFrame(overlayRenderFrame);
+    overlayRenderFrame = null;
+  }
+  overlayCtx = null;
 };
 
 const handleWithdraw = async () => {
@@ -3381,6 +3852,18 @@ const pushNewSignal = () => {
   flex: 1;
   display: flex;
   flex-direction: column;
+}
+
+.drawing-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.drawing-overlay.active {
+  pointer-events: auto;
+  cursor: crosshair;
 }
 
 .chart-surface {
@@ -5067,52 +5550,269 @@ const pushNewSignal = () => {
 }
 
 /* Indicators Menu */
-.indicators-menu {
-  width: 600px;
-  max-height: 400px;
+.indicators-menu-content {
+  max-height: 420px;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
 }
 
-.indicators-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+.indicator-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.indicator-accordion-item {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  transition: border 0.2s, background 0.2s;
+}
+
+.indicator-accordion-item.open {
+  border-color: rgba(93, 247, 194, 0.4);
+  background: rgba(93, 247, 194, 0.06);
+}
+
+.indicator-accordion-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.indicator-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.indicator-row:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.indicator-meta {
+  display: flex;
+  flex-direction: column;
   gap: 4px;
 }
 
-.indicator-item {
+.indicator-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.indicator-row-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: #d1d4dc;
-  font-size: 13px;
+  gap: 10px;
+}
+
+.indicator-toggle {
+  width: 38px;
+  height: 20px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  padding: 2px;
   transition: all 0.2s;
 }
 
-.indicator-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+.indicator-toggle.on {
+  background: #5df7c2;
+}
+
+.indicator-toggle-handle {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transform: translateX(0);
+  transition: transform 0.2s;
+}
+
+.indicator-toggle.on .indicator-toggle-handle {
+  transform: translateX(18px);
+}
+
+.accordion-arrow {
+  transition: transform 0.2s ease;
+  color: #6b7280;
+}
+
+.accordion-arrow.rotated {
+  transform: rotate(180deg);
+  color: #5df7c2;
+}
+
+.indicator-chip {
+  font-size: 11px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #8fa1c4;
+}
+
+.indicator-detail-panel {
+  padding: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.settings-title {
+  font-weight: 700;
+  font-size: 16px;
   color: #fff;
 }
 
-.star-icon {
-  color: #6b7280;
-  font-size: 14px;
+.settings-desc {
+  font-size: 12px;
+  color: #8fa1c4;
+  margin-top: 4px;
 }
 
-.indicator-item:hover .star-icon {
-  color: #ffd257;
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.active-dot {
-  width: 6px;
-  height: 6px;
-  background: #5df7c2;
+.setting-control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.setting-control label {
+  font-size: 12px;
+  color: #8fa1c4;
+  font-weight: 600;
+}
+
+.setting-control input,
+.setting-control select {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #fff;
+  font-size: 13px;
+  outline: none;
+  transition: border 0.2s;
+}
+
+.setting-control input:focus,
+.setting-control select:focus {
+  border-color: rgba(93, 247, 194, 0.4);
+}
+
+.settings-reset {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #8fa1c4;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.settings-reset:hover {
+  border-color: rgba(93, 247, 194, 0.4);
+  color: #5df7c2;
+}
+
+.settings-placeholder {
+  font-size: 12px;
+  color: #6b7a99;
+  padding: 20px;
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.settings-toggle-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.settings-toggle {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  display: inline-block;
+}
+
+.settings-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.settings-toggle span {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.2);
+  transition: 0.2s;
+  border-radius: 999px;
+}
+
+.settings-toggle span:before {
+  position: absolute;
+  content: '';
+  height: 18px;
+  width: 18px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: 0.2s;
   border-radius: 50%;
-  margin-left: auto;
+}
+
+.settings-toggle input:checked + span {
+  background-color: #5df7c2;
+}
+
+.settings-toggle input:checked + span:before {
+  transform: translateX(18px);
+}
+
+.accordion-enter-active,
+.accordion-leave-active {
+  transition: max-height 0.2s ease, opacity 0.2s ease;
+}
+.accordion-enter-from,
+.accordion-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+.accordion-enter-to,
+.accordion-leave-from {
+  max-height: 500px;
+  opacity: 1;
 }
 
 /* Drawing Menu */
@@ -5176,12 +5876,6 @@ const pushNewSignal = () => {
   gap: 20px;
 }
 
-.indicators-menu-content .indicators-grid {
-  display: grid;
-  grid-template-columns: 1fr; /* Single column for better readability in side panel */
-  gap: 4px;
-}
-
 .drawing-menu-content .tools-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -5222,6 +5916,17 @@ const pushNewSignal = () => {
   box-shadow: 0 6px 20px rgba(93, 247, 194, 0.4);
 }
 
+.action-btn.danger {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ff3d71 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.35);
+}
+
+.action-btn.danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.45);
+}
+
 .action-btn.secondary {
   background: linear-gradient(135deg, rgba(93, 247, 194, 0.15), rgba(61, 255, 181, 0.08));
   border: 1px solid rgba(93, 247, 194, 0.3);
@@ -5258,6 +5963,13 @@ const pushNewSignal = () => {
   cursor: pointer;
   transition: all 0.2s;
   min-height: 80px;
+}
+
+.tool-grid-item.active {
+  border-color: rgba(93, 247, 194, 0.6);
+  background: rgba(93, 247, 194, 0.15);
+  color: #5df7c2;
+  box-shadow: 0 4px 16px rgba(93, 247, 194, 0.25);
 }
 
 .tool-grid-item:hover {
