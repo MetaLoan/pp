@@ -24,7 +24,13 @@ jwt:
   expire: 24h
 
 trading:
-  allowedSymbols: ["EURUSD", "BTCUSDT", "ETHUSDT", "S1"]
+  allowedSymbols: [
+    "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "NZDUSD", "EURGBP", "EURJPY", "GBPJPY", "AUDJPY",
+    "BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "SOLUSDT", "DOGEUSDT", "DOTUSDT",
+    "XAUUSD", "XAGUSD", "WTIUSD", "NATGAS",
+    "US500", "US100", "US30", "DE40", "UK100", "JP225",
+    "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "NFLX"
+  ]
   minOrderAmount: 1
   maxOrderAmount: 10000
   maxOpenOrders: 10
@@ -41,10 +47,42 @@ market:
     failThreshold: 3
     openSeconds: 10
   mockInitial:
-    EURUSD: 1.05
-    BTCUSDT: 65000
-    ETHUSDT: 3200
-    S1: 100
+    EURUSD: 1.0850
+    GBPUSD: 1.2680
+    USDJPY: 149.50
+    AUDUSD: 0.6750
+    USDCAD: 1.3650
+    NZDUSD: 0.6150
+    EURGBP: 0.8560
+    EURJPY: 161.50
+    GBPJPY: 187.20
+    AUDJPY: 100.80
+    BTCUSDT: 62450
+    ETHUSDT: 2850
+    BNBUSDT: 610
+    XRPUSDT: 0.52
+    ADAUSDT: 0.98
+    SOLUSDT: 138
+    DOGEUSDT: 0.32
+    DOTUSDT: 8.50
+    XAUUSD: 2285
+    XAGUSD: 27.50
+    WTIUSD: 78.50
+    NATGAS: 2.95
+    US500: 5810
+    US100: 18950
+    US30: 38620
+    DE40: 17850
+    UK100: 8120
+    JP225: 33200
+    AAPL: 189.50
+    MSFT: 415
+    GOOGL: 185
+    AMZN: 195
+    TSLA: 245
+    META: 480
+    NVDA: 875
+    NFLX: 680
   pollInterval: "100ms"     # Fast polling for S1 simulation
   maxBehindSeconds: 5      # maximum staleness allowed for price timestamp caching
   symbolMap:

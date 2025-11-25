@@ -1000,6 +1000,8 @@ const getTrendForPair = (symbol) => {
   // 如果并列，选第一个（最新的）
   const selectedSignal = topSignals[0];
   
+  if (!selectedSignal) return null;
+
   return {
     direction: selectedSignal.action, // 'CALL' or 'PUT'
     strength: selectedSignal.strength // 1 or 2
@@ -2164,6 +2166,7 @@ const pushNewSignal = () => {
     amount: Math.floor(Math.random() * 150) + 25, // 25 - 175
     duration: 60 * (Math.floor(Math.random() * 9) + 1), // 60s - 540s
     followers: randomFollowers,
+    copied: 0,
     createdAt: now,
     validity: validity,
     expiryTime: now + validity,

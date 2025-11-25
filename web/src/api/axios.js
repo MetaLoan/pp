@@ -15,9 +15,11 @@ let authPromise = null;
 
 // Auto register/login a demo account when running locally to keep
 // the trading and wallet endpoints usable without a manual login step.
-const ensureDemoToken = async () => {
-  const existing = localStorage.getItem('token');
-  if (existing) return existing;
+const ensureDemoToken = async (force = false) => {
+  if (!force) {
+    const existing = localStorage.getItem('token');
+    if (existing) return existing;
+  }
 
   if (authPromise) return authPromise;
 
@@ -85,7 +87,7 @@ api.interceptors.response.use(
     ) {
       config._retry = true;
       try {
-        const token = await ensureDemoToken();
+        const token = await ensureDemoToken(true);
         if (token) {
           config.headers = config.headers || {};
           config.headers.Authorization = `Bearer ${token}`;

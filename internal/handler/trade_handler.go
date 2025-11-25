@@ -23,7 +23,7 @@ type PlaceOrderRequest struct {
 	Symbol      string  `json:"symbol" binding:"required"`
 	Direction   string  `json:"direction" binding:"required,oneof=CALL PUT"`
 	Amount      float64 `json:"amount" binding:"required,gt=0"`
-	Duration    int     `json:"duration" binding:"required,min=30"` // seconds
+	Duration    int     `json:"duration" binding:"required,min=5"` // seconds
 	ClientPrice float64 `json:"client_price"`                       // optional: price user saw on UI
 }
 
