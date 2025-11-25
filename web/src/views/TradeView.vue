@@ -184,6 +184,7 @@
                 <div class="symbol-search-box">
                   <Search :size="16" class="search-icon" />
                   <input 
+                    id="symbol-search" name="symbolSearch"
                     v-model="symbolSearchQuery" 
                     type="text" 
                     placeholder="搜索" 
@@ -356,7 +357,7 @@
                     <span>Amount</span>
                   </div>
                   <div class="input-field">
-                    <input type="number" v-model="amount" min="1" placeholder="10" />
+                    <input id="trade-amount" name="amount" type="number" v-model="amount" min="1" placeholder="10" />
                     <span class="input-unit">USDT</span>
                   </div>
                 </div>
@@ -369,7 +370,7 @@
                     <span>Duration</span>
                   </div>
                   <div class="input-field">
-                    <select v-model="duration">
+                    <select id="trade-duration" name="duration" v-model="duration">
                       <option value="60">1m</option>
                       <option value="180">3m</option>
                       <option value="300">5m</option>
@@ -738,6 +739,7 @@
                 <div class="deposit-input-wrapper">
                   <span class="currency-prefix">USDT</span>
                   <input 
+                    id="deposit-amount" name="depositAmount"
                     type="number" 
                     v-model="depositAmount" 
                     min="1" 
