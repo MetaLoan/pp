@@ -22,15 +22,8 @@ func (h *MarketHandler) GetPrice(c *gin.Context) {
 		return
 	}
 	// core.GlobalMarket holds lastPrice map
-	core := core.GlobalMarket
-	if core == nil {
-		c.JSON(500, gin.H{"error": "market not initialized"})
-		return
-	}
-	core.mu.RLock()
-	defer core.mu.RUnlock()
-	if p, ok := core.lastPrice[symbol]; ok {
-		c.JSON(200, gin.H{"symbol": symbol, "price": p.Price, "timestamp": p.Timestamp})
+	if d, ok := core.GetLastPrice(symbol); ok {
+		c.JSON(200, gin.H{"symbol": symbol, "price": d.Price, "timestamp": d.Timestamp})
 		return
 	}
 	c.JSON(404, gin.H{"error": "no price for symbol"})

@@ -229,6 +229,17 @@ func (m *MarketEngine) GetCurrentPrice(symbol string) (float64, error) {
 	return data.Price, nil
 }
 
+// GetLastPrice returns the last MarketData for a symbol if available (thread-safe accessor)
+func GetLastPrice(symbol string) (MarketData, bool) {
+	if GlobalMarket == nil {
+		return MarketData{}, false
+	}
+	GlobalMarket.mu.RLock()
+	defer GlobalMarket.mu.RUnlock()
+	d, ok := GlobalMarket.lastPrice[symbol]
+	return d, ok
+}
+
 // GetCandles aggregates in-memory ticks into OHLC candles.
 func (m *MarketEngine) GetCandles(symbol string, intervalSec int, limit int) []map[string]interface{} {
 	if intervalSec <= 0 {
