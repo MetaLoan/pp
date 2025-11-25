@@ -24,7 +24,8 @@ func NewMockProvider(initial map[string]float64) *MockProvider {
 }
 
 func (m *MockProvider) tick() {
-	ticker := time.NewTicker(100 * time.Millisecond)
+	// Reduce tick frequency to 1s to lower simulated update rate
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
 		m.mu.Lock()
