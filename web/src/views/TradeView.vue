@@ -1223,6 +1223,8 @@ const interpolatedPrice = ref(0);
 let animationFrameId = null;
 let lastRenderedCandleCount = 0;
 let lastRenderedCandleTime = 0;
+const disableSmoothing = ref(false); // toggle to disable interpolation for debugging
+const smoothingFactor = ref(0.05);
 
 const currentPrice = computed(() => interpolatedPrice.value || marketStore.currentPrice);
 const activeOrders = computed(() => marketStore.activeOrders);
@@ -1843,11 +1845,19 @@ const animatePrice = () => {
   }
 
   const diff = target - interpolatedPrice.value;
-  if (Math.abs(diff) < 0.00001) {
+  // Debug: show raw vs interpolated
+  // eslint-disable-next-line no-console
+  console.debug('[animatePrice] target:', target, 'interp:', interpolatedPrice.value, 'diff:', diff, 'smoothing:', disableSmoothing.value ? 0 : smoothingFactor.value);
+
+  if (disableSmoothing.value) {
+    // apply immediately
     interpolatedPrice.value = target;
   } else {
-    // Smooth interpolation factor (adjust 0.1 for speed)
-    interpolatedPrice.value += diff * 0.05;
+    if (Math.abs(diff) < 0.00001) {
+      interpolatedPrice.value = target;
+    } else {
+      interpolatedPrice.value += diff * smoothingFactor.value;
+    }
   }
 
   // Update chart with interpolated price
