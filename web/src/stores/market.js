@@ -125,10 +125,17 @@ export const useMarketStore = defineStore('market', {
           console.log('Attempting to reconnect...');
           this.connect();
         }, 3000);
+        // Start local mock as a fallback when WS is disconnected
+        if (!this.mockInterval) {
+          // small delay before starting mock to avoid racing with reconnect attempts
+          setTimeout(() => {
+            if (!this.socket && !this.mockInterval) this.startMockPriceGenerator();
+          }, 1500);
+        }
       };
       
-      // 同时启动本地模拟价格生成（备选方案）
-      this.startMockPriceGenerator();
+      // 本地模拟器不在连接成功时立即启动，避免与服务器实时数据冲突。
+      // 仅在连接关闭（或无法连接）时作为回退启动。
     },
     
     // 启动本地模拟价格生成器（每500ms生成一个新价格）
