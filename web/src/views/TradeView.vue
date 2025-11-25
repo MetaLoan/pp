@@ -908,7 +908,7 @@ const generateM30TestSignals = () => {
   ];
   
   const signalTitles = [
-    '突破', '反弹', '拐点', '加速', '回调', '强势', '弱势', '盘整', '加仓', '获利',
+    '突破', '反弹', '加速', '回调', '强势', '弱势', '盘整', '加仓', '获利',
     '冲高', '探底', '缩量', '放量', '修复', '衰竭', '启动', '转折', '蓄势', '狂欢'
   ];
   
@@ -1219,6 +1219,7 @@ let drawingMode = false;
 
 const interpolatedPrice = ref(0);
 let animationFrameId = null;
+let lastRenderedCandleCount = 0;
 
 const currentPrice = computed(() => interpolatedPrice.value || marketStore.currentPrice);
 const activeOrders = computed(() => marketStore.activeOrders);
@@ -1632,8 +1633,42 @@ const renderCandles = (updatePrice = true) => {
       c.close != null
   );
 
+  // Sanitize and ensure numeric types and ascending time order before sending to chart
+  const sanitized = candles
+    .map((c) => ({
+      time: Number(c.time),
+      open: Number(c.open),
+      high: Number(c.high),
+      low: Number(c.low),
+      close: Number(c.close),
+    }))
+    .filter((c) => Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close))
+    .sort((a, b) => a.time - b.time);
+
   if (updatePrice) {
-    series.setData(candles);
+    // Debug info to help diagnose cases where only 1-2 candles render
+    // eslint-disable-next-line no-console
+    console.debug('[renderCandles] count:', sanitized.length, 'first:', sanitized[0], 'last:', sanitized[sanitized.length - 1], 'lastRendered:', lastRenderedCandleCount);
+
+    // If we haven't rendered before, or we have a reasonably-sized dataset, replace full data.
+    // Otherwise, when backend occasionally returns very small arrays (1-2 candles), just update the latest candle
+    // to avoid collapsing the chart to a couple of bars.
+    if (lastRenderedCandleCount === 0 || sanitized.length >= 3) {
+      series.setData(sanitized);
+      lastRenderedCandleCount = sanitized.length;
+    } else {
+      // sanitized.length is 1 or 2 but we previously had more candles: update only the latest point
+      const last = sanitized[sanitized.length - 1];
+      if (last) {
+        try {
+          series.update(last);
+        } catch (e) {
+          // Fallback to setData if update fails for any reason
+          series.setData(sanitized);
+        }
+      }
+      // keep lastRenderedCandleCount unchanged (we don't shrink history here)
+    }
 
     if (candles.length > 1) {
       const last = candles[candles.length - 1];
@@ -1643,11 +1678,11 @@ const renderCandles = (updatePrice = true) => {
   }
 
   if (smaSeries) {
-    const data = showSMA.value ? computeSMA(candles, smaPeriod.value) : [];
+    const data = showSMA.value ? computeSMA(sanitized, smaPeriod.value) : [];
     smaSeries.setData(data);
   }
   if (emaSeries) {
-    const data = showEMA.value ? computeEMA(candles, smaPeriod.value) : [];
+    const data = showEMA.value ? computeEMA(sanitized, smaPeriod.value) : [];
     emaSeries.setData(data);
   }
 };
@@ -1682,6 +1717,8 @@ const createSeries = () => {
     smaSeries = chart.addSeries(LineSeries, { color: '#ffeb3b', lineWidth: 1, ...baseOptions });
     emaSeries = chart.addSeries(LineSeries, { color: '#ff9800', lineWidth: 1, ...baseOptions });
   }
+  // reset last rendered count when recreating series (e.g. on symbol or chart type change)
+  lastRenderedCandleCount = 0;
 };
 
 const refreshCandles = async () => {
@@ -2137,7 +2174,6 @@ const pushNewSignal = () => {
   const signalTitles = [
     `${randomSymbol.symbol} 突破`,
     `${randomSymbol.symbol} 反弹`,
-    `${randomSymbol.symbol} 拐点`,
     `${randomSymbol.symbol} 加速`,
     `${randomSymbol.symbol} 回调`,
   ];
