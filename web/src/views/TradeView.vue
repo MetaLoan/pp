@@ -116,7 +116,10 @@
               <!-- Chart & Timeframe Menu -->
               <div class="tool-wrapper">
                 <button class="tool-btn" :class="{ active: activeMenu === 'chart' }" @click.stop="toggleMenu('chart')">
-                  <BarChart2 :size="18" />
+                  <LineChart v-if="chartType === 'line'" :size="18" />
+                  <BarChart2 v-else-if="chartType === 'candle'" :size="18" />
+                  <Activity v-else-if="chartType === 'area'" :size="18" />
+                  <BarChart2 v-else :size="18" />
                   <span class="tool-badge">{{ timeframeLabel(timeframe) }}</span>
                 </button>
               </div>
@@ -257,7 +260,7 @@
                       v-for="tf in timeframesConfig" 
                       :key="tf.value"
                       :class="['tf-btn', timeframe === tf.value ? 'active' : '']"
-                      @click="timeframe = tf.value"
+                      @click="setTimeframeByValue(tf.value)"
                     >
                       {{ tf.label }}
                     </button>
@@ -367,9 +370,12 @@
                   </div>
                   <div class="input-field">
                     <select v-model="duration">
-                      <option value="30">30s</option>
-                      <option value="60">60s</option>
+                      <option value="60">1m</option>
+                      <option value="180">3m</option>
                       <option value="300">5m</option>
+                      <option value="1800">30m</option>
+                      <option value="3600">1h</option>
+                      <option value="14400">4h</option>
                     </select>
                   </div>
                 </div>
@@ -423,6 +429,8 @@
             :class="['dock-btn', { active: activeRightModule === dock.id }]"
             @click="activeRightModule = dock.id"
           >
+            <!-- Order Active订单数量角标 -->
+            <div v-if="dock.id === 'orders' && activeOrders.length > 0" class="dock-badge dock-badge-active">{{ activeOrders.length }}</div>
             <component :is="dock.icon" :size="18" />
             <div class="dock-text">
               <span class="dock-label">{{ dock.label }}</span>
@@ -548,78 +556,45 @@
                     </button>
                   </div>
                 </div>
-                <div class="control-group">
-                  <span class="control-label">周期</span>
-                  <div class="filter-buttons">
-                    <button :class="['filter-btn', { active: signalFilterTiming === 'all' }]" @click="signalFilterTiming = 'all'" style="width: 40px">
-                      全
-                    </button>
-                    <button v-for="t in ['1m', '2m', '3m', '4m', '5m']" :key="t" :class="['filter-btn', { active: signalFilterTiming === t }]" @click="signalFilterTiming = t" style="width: 40px">
-                      {{ t }}
-                    </button>
-                  </div>
-                </div>
               </div>
 
               <div class="signal-list">
-                <!-- Signal Table Header -->
-                <div class="signal-header-row">
-                  <div class="signal-cell symbol-cell"></div>
-                  <div class="signal-cell trend-cell"></div>
-                  <div class="signal-cell copies-cell"></div>
-                  <div class="signal-cell expiry-cell"></div>
-                  <div class="signal-cell time-cell"></div>
-                  <div class="signal-cell action-cell"></div>
-                </div>
-
-                <!-- Signal Rows -->
+                <!-- Signal Rows (Header Removed) -->
                 <div v-for="sig in filteredSignals" :key="sig.title" :class="['signal-row', { 'signal-expired': !getSignalValidity(sig).isValid }]">
-                  <!-- 交易标的 -->
+                  <!-- 交易标的 + 复制人数角标 -->
                   <div class="signal-cell symbol-cell">
-                    <span class="symbol-badge">{{ sig.symbol }}</span>
+                    <div class="symbol-wrapper">
+                      <div class="copies-badge-small">
+                        <Users :size="10" /> {{ sig.followers }}
+                      </div>
+                      <span class="symbol-text">{{ sig.symbol }}</span>
+                    </div>
                   </div>
 
                   <!-- 趋势强度 -->
                   <div class="signal-cell trend-cell">
-                    <div :class="['trend-indicator', { up: sig.confidence >= 0.5, down: sig.confidence < 0.5 }]">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <polyline v-if="sig.confidence >= 0.5" points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-                        <polyline v-else points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline>
-                      </svg>
-                      <span class="trend-arrows">{{ sig.confidence >= 0.8 ? '↑↑↑' : sig.confidence >= 0.5 ? '↑↑' : sig.confidence >= 0.3 ? '↓' : '↓↓' }}</span>
-                    </div>
+                    <span :class="['trend-arrows', sig.action === 'CALL' ? 'up' : 'down']">
+                      {{ sig.action === 'CALL' ? '↑' : '↓' }}{{ sig.strength > 1 ? (sig.action === 'CALL' ? '↑' : '↓') : '' }}
+                    </span>
                   </div>
 
-                  <!-- 已复制数量 -->
-                  <div class="signal-cell copies-cell">
-                    <span class="copies-badge">{{ sig.copied }}</span>
-                  </div>
-
-                  <!-- 到期时间 -->
-                  <div class="signal-cell expiry-cell">
-                    <div v-if="getSignalValidity(sig).isValid" class="expiry-timer">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <polyline points="12 6 12 12 16 14"></polyline>
-                      </svg>
-                      <span>{{ Math.ceil(getSignalValidity(sig).remaining / 1000) }}s</span>
-                    </div>
-                    <span v-else class="expiry-badge expired">已过期</span>
-                  </div>
-
-                  <!-- 产生时间（相对时间） -->
+                  <!-- 产生时间 -->
                   <div class="signal-cell time-cell">
                     <span class="time-text">{{ formatSignalTime(sig.createdAt) }}</span>
                   </div>
 
-                  <!-- 跟随按钮 (放在最后) -->
+                  <!-- 跟随按钮 (包含倒计时) -->
                   <div class="signal-cell action-cell">
                     <button 
                       v-if="getSignalValidity(sig).isValid"
                       :class="['btn-follow', sig.action === 'CALL' ? 'btn-call' : 'btn-put']" 
                       @click="handleSignalTrade(sig)"
                       :title="`跟随 ${sig.action} 信号`">
-                      {{ sig.action }}
+                      <span class="btn-action-text">{{ sig.action }}</span>
+                      <span class="btn-timer-text">
+                        <Clock :size="10" />
+                        {{ formatDuration(getSignalValidity(sig).remaining) }}
+                      </span>
                     </button>
                     <span v-else class="btn-expired">已过期</span>
                   </div>
@@ -631,37 +606,30 @@
               </div>
             </div>
             
-            <!-- Tab 2: Market Trends by Timeframe -->
+            <!-- Tab 2: Switch Symbol by Category and Timeframe -->
             <div v-show="activeSignalTab === 'markets'" class="market-trends-view">
-              <div class="timeframe-selector">
-                <button v-for="tf in ['1m', '2m', '3m', '4m', '5m']" :key="tf" 
-                  :class="['tf-btn', { active: signalFilterTiming === tf || (signalFilterTiming === 'all' && tf === '1m') }]"
-                  @click="signalFilterTiming = tf">
+              <!-- Timeframe Selector (6 options) -->
+              <div class="section-header">时间框架</div>
+              <div class="timeframe-grid">
+                <button v-for="tf in ['M1', 'M3', 'M5', 'M30', 'H1', 'H4']" :key="tf" 
+                  :class="['timeframe-btn', { active: selectedTimeframe === tf }]"
+                  @click="setTimeframeByLabel(tf)">
                   {{ tf }}
                 </button>
               </div>
               
-              <div class="market-pairs-grid">
-                <div v-for="marketData in marketTrends" :key="marketData.symbol" class="market-pair-card">
-                  <div class="pair-header">
-                    <span class="pair-name">{{ marketData.display }}</span>
-                    <button class="pair-switch-btn" @click="selectedSymbol = marketData.symbol; activeRightModule = 'orders'" title="切换到此标的">
-                      →
-                    </button>
+              <!-- Trading Pairs List (with dynamic trends) -->
+              <div class="section-header">交易标的</div>
+              <div class="pairs-list-container">
+                <div v-for="pair in tradingPairs" :key="pair.symbol" 
+                  :class="['pair-list-item', { active: selectedSymbol === pair.symbol }]"
+                  @click="selectedSymbol = pair.symbol">
+                  <div class="pair-main">
+                    <span class="pair-symbol">{{ pair.symbol }}</span>
+                    <span class="pair-display">{{ pair.display }}</span>
                   </div>
-                  <div class="trend-for-timeframe">
-                    <div v-if="signalFilterTiming === 'all' || signalFilterTiming === '1m'" class="trend-item">
-                      <span class="trend-label">1m</span>
-                      <span :class="['trend-strength', marketData.trends['1m'].direction > 0 ? 'up' : 'down']">
-                        {{ getTrendArrows(marketData.trends['1m'].strength, marketData.trends['1m'].direction) }}
-                      </span>
-                    </div>
-                    <div v-else class="trend-item">
-                      <span class="trend-label">{{ signalFilterTiming }}</span>
-                      <span :class="['trend-strength', marketData.trends[signalFilterTiming].direction > 0 ? 'up' : 'down']">
-                        {{ getTrendArrows(marketData.trends[signalFilterTiming].strength, marketData.trends[signalFilterTiming].direction) }}
-                      </span>
-                    </div>
+                  <div v-if="getTrendForPair(pair.symbol)" :class="['pair-trend', getTrendForPair(pair.symbol).direction === 'CALL' ? 'trend-up' : 'trend-down']">
+                    <span class="trend-arrow">{{ getTrendForPair(pair.symbol).direction === 'CALL' ? '↑' : '↓' }}{{ getTrendForPair(pair.symbol).strength > 1 ? getTrendForPair(pair.symbol).direction === 'CALL' ? '↑' : '↓' : '' }}</span>
                   </div>
                 </div>
               </div>
@@ -834,11 +802,53 @@ const signalSortBy = ref('confidence'); // 'confidence' | 'timing' | 'new'
 const signalFilterAction = ref('all'); // 'all' | 'CALL' | 'PUT'
 const signalFilterTiming = ref('all'); // 'all' | '1m' | '2m' | '3m' | '4m' | '5m'
 const chartType = ref('line'); // line | area | candle
-const timeframe = ref(5); // seconds per bar
+const timeframe = ref(60); // seconds per bar (default M1)
 const showSMA = ref(false);
 const showEMA = ref(false);
 const smaPeriod = ref(10);
 const timeframeOptions = [1, 5, 15, 30, 60, 300, 600]; // Keep for logic mapping
+
+// 时间框架标签到秒数的映射
+const timeframeMap = {
+  'M1': 60,
+  'M3': 180,
+  'M5': 300,
+  'M30': 1800,
+  'H1': 3600,
+  'H4': 14400
+};
+
+// 秒数到标签的反向映射
+const reverseTimeframeMap = {
+  60: 'M1',
+  180: 'M3',
+  300: 'M5',
+  1800: 'M30',
+  3600: 'H1',
+  14400: 'H4'
+};
+
+// 根据时间框架标签更新图表级别
+const setTimeframeByLabel = (label) => {
+  selectedTimeframe.value = label;
+  timeframe.value = timeframeMap[label] || 60;
+  // 保存到localStorage以便页面刷新时恢复
+  localStorage.setItem('tradeView_timeframe', String(timeframeMap[label] || 60));
+};
+
+// 根据秒数值设置时间框架，只在预设列表内时更新selectedTimeframe
+const setTimeframeByValue = (seconds) => {
+  timeframe.value = seconds;
+  // 保存到localStorage以便页面刷新时恢复
+  localStorage.setItem('tradeView_timeframe', String(seconds));
+  // 如果这个秒数值对应预设的6个时间框架之一，则更新selectedTimeframe
+  if (reverseTimeframeMap[seconds]) {
+    selectedTimeframe.value = reverseTimeframeMap[seconds];
+  } else {
+    // 如果不在预设列表内，则清空selectedTimeframe（使Markets TAB中的按钮都不激活）
+    selectedTimeframe.value = null;
+  }
+};
 
 // Right dock modules
 const activeRightModule = ref('orders');
@@ -851,14 +861,166 @@ const rightDockItems = [
   { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
 ];
 
-const signalFeed = ref([
-  { title: 'EUR/USD 突破', metric: '动量 +1.2σ', confidence: 0.82, action: 'CALL', timing: '5m', symbol: 'EURUSD', amount: 50, duration: 300, copied: 1240, createdAt: Date.now() - 180000, validity: 600000, expiryTime: Date.now() - 180000 + 600000 },
-  { title: 'BTC/USDT 回踩', metric: 'RSI 34 · 趋势向上', confidence: 0.74, action: 'CALL', timing: '3m', symbol: 'BTCUSDT', amount: 100, duration: 180, copied: 856, createdAt: Date.now() - 120000, validity: 180000, expiryTime: Date.now() - 120000 + 180000 },
-  { title: 'XAU/USD 拐点', metric: '布林中轨反弹', confidence: 0.68, action: 'PUT', timing: '1m', symbol: 'XAUUSD', amount: 25, duration: 60, copied: 543, createdAt: Date.now() - 60000, validity: 60000, expiryTime: Date.now() - 60000 + 60000 },
-]);
+// 生成20条M30时间框架的测试信号数据
+const generateM30TestSignals = () => {
+  const signals = [];
+  const now = Date.now();
+  const actions = ['CALL', 'PUT'];
+  
+  // 交易对列表
+  const tradingPairsList = [
+    { symbol: 'EURUSD' },
+    { symbol: 'GBPUSD' },
+    { symbol: 'USDJPY' },
+    { symbol: 'AUDUSD' },
+    { symbol: 'USDCAD' },
+    { symbol: 'NZDUSD' },
+    { symbol: 'EURGBP' },
+    { symbol: 'EURJPY' },
+    { symbol: 'GBPJPY' },
+    { symbol: 'AUDJPY' },
+    { symbol: 'BTCUSDT' },
+    { symbol: 'ETHUSDT' },
+    { symbol: 'BNBUSDT' },
+    { symbol: 'XRPUSDT' },
+    { symbol: 'ADAUSDT' },
+    { symbol: 'SOLUSDT' },
+    { symbol: 'DOGEUSDT' },
+    { symbol: 'DOTUSDT' },
+    { symbol: 'XAUUSD' },
+    { symbol: 'XAGUSD' },
+    { symbol: 'WTIUSD' },
+    { symbol: 'NATGAS' },
+    { symbol: 'US500' },
+    { symbol: 'US100' },
+    { symbol: 'US30' },
+    { symbol: 'DE40' },
+    { symbol: 'UK100' },
+    { symbol: 'JP225' },
+    { symbol: 'AAPL' },
+    { symbol: 'MSFT' },
+    { symbol: 'GOOGL' },
+    { symbol: 'AMZN' },
+    { symbol: 'TSLA' },
+    { symbol: 'META' },
+    { symbol: 'NVDA' },
+    { symbol: 'NFLX' },
+  ];
+  
+  const signalTitles = [
+    '突破', '反弹', '拐点', '加速', '回调', '强势', '弱势', '盘整', '加仓', '获利',
+    '冲高', '探底', '缩量', '放量', '修复', '衰竭', '启动', '转折', '蓄势', '狂欢'
+  ];
+  
+  const metrics = [
+    'RSI 指标强势',
+    'MACD 金叉',
+    'MA 均线突破',
+    'Stoch 信号',
+    'CCI 极值',
+    'ATR 突破',
+    'Volume 突增',
+    '布林突破',
+    'Trend 确认',
+    '支撑反弹',
+    '阻力突破',
+    '角度强势',
+    '分时强力',
+    '级别共振',
+    '多空转变',
+    '确认有效',
+    '信心强势',
+    '破位启动',
+    '连续突破',
+    '黄金位置'
+  ];
+  
+  // 为每个交易对和时间框架生成20条信号
+  for (let i = 0; i < 20; i++) {
+    const randomSymbol = tradingPairsList[Math.floor(Math.random() * tradingPairsList.length)];
+    const titleIndex = i % signalTitles.length;
+    const metricIndex = (i + Math.floor(Math.random() * metrics.length)) % metrics.length;
+    
+    const signal = {
+      title: `${randomSymbol.symbol} ${signalTitles[titleIndex]}`,
+      metric: metrics[metricIndex],
+      confidence: 0.6 + Math.random() * 0.35, // 0.6 - 0.95
+      action: actions[Math.floor(Math.random() * actions.length)],
+      timing: 'm30',
+      symbol: randomSymbol.symbol,
+      timeframe: 'M30',
+      strength: Math.random() > 0.5 ? 2 : 1,
+      amount: Math.floor(Math.random() * 150) + 25, // 25 - 175
+      duration: 1800 + Math.floor(Math.random() * 1800), // 30m - 60m (1800s - 3600s)
+      followers: Math.floor(Math.random() * 1900) + 100,
+      copied: Math.floor(Math.random() * 15),
+      createdAt: now - i * 60000, // 每条间隔1分钟
+      validity: 1800000 + Math.floor(Math.random() * 1800000), // 30m - 60m
+      expiryTime: now - i * 60000 + (1800000 + Math.floor(Math.random() * 1800000)),
+      isNew: i === 0, // 第一条标记为新
+    };
+    
+    signals.push(signal);
+  }
+  
+  return signals;
+};
+
+const signalFeed = ref(generateM30TestSignals());
 
 // Signal module tabs
 const activeSignalTab = ref('signals'); // 'signals' | 'markets'
+
+// 时间框架选择
+const selectedTimeframe = ref('M1');
+
+// 根据标的和时间框架获取趋势强度和方向
+const getTrendForPair = (symbol) => {
+  // 找出该 [symbol + selectedTimeframe] 组合下所有信号
+  const matchingSignals = signalFeed.value.filter(s => 
+    s.symbol === symbol && s.timeframe === selectedTimeframe.value
+  );
+  
+  if (matchingSignals.length === 0) {
+    return null;
+  }
+  
+  // 过滤有效信号（未过期）
+  const now = Date.now();
+  const validSignals = matchingSignals.filter(s => s.expiryTime > now);
+  
+  if (validSignals.length === 0) {
+    return null;
+  }
+  
+  // 找复制人数最多的有效信号
+  const maxCopied = Math.max(...validSignals.map(s => s.copied));
+  const topSignals = validSignals.filter(s => s.copied === maxCopied);
+  
+  // 如果并列，选第一个（最新的）
+  const selectedSignal = topSignals[0];
+  
+  return {
+    direction: selectedSignal.action, // 'CALL' or 'PUT'
+    strength: selectedSignal.strength // 1 or 2
+  };
+};
+
+// 信号列表过滤 - 按选中的标的过滤（不按时间框架过滤）
+const filteredSignals = computed(() => {
+  return signalFeed.value
+    .filter(s => s.symbol === selectedSymbol.value)
+    .filter(s => signalFilterAction.value === 'all' || s.action === signalFilterAction.value)
+    .sort((a, b) => {
+      if (signalSortBy.value === 'confidence') {
+        return b.confidence - a.confidence;
+      } else if (signalSortBy.value === 'followers') {
+        return b.followers - a.followers;
+      } else {
+        return b.createdAt - a.createdAt;
+      }
+    });
+});
 
 const socialLeaders = ref([
   { name: 'NovaQuant', initials: 'NQ', region: '新加坡', winRate: 78, roi: 34, copiers: '2.1k' },
@@ -984,47 +1146,6 @@ const toggleFavorite = (symbol) => {
 const allowedSymbols = computed(() => tradingPairs.value.map(p => p.symbol));
 
 // 信号过滤和排序
-const filteredSignals = computed(() => {
-  let signals = signalFeed.value;
-
-  // 按交易方向过滤
-  if (signalFilterAction.value !== 'all') {
-    signals = signals.filter(s => s.action === signalFilterAction.value);
-  }
-
-  // 按标的过滤（仅显示当前选中标的的信号）
-  signals = signals.filter(s => s.symbol === selectedSymbol.value);
-
-  // 按时间框架过滤
-  if (signalFilterTiming.value !== 'all') {
-    signals = signals.filter(s => s.timing === signalFilterTiming.value);
-  }
-
-  // 按条件排序
-  const sorted = [...signals];
-  switch (signalSortBy.value) {
-    case 'confidence':
-      // 从高到低排序
-      sorted.sort((a, b) => b.confidence - a.confidence);
-      break;
-    case 'timing':
-      // 时间框架排序(数字小的在前)
-      const timingOrder = { '1m': 1, '2m': 2, '3m': 3, '4m': 4, '5m': 5 };
-      sorted.sort((a, b) => {
-        const aVal = timingOrder[a.timing] || 999;
-        const bVal = timingOrder[b.timing] || 999;
-        return aVal - bVal;
-      });
-      break;
-    case 'new':
-      // 新信号优先
-      sorted.sort((a, b) => (b.isNew ? 1 : 0) - (a.isNew ? 1 : 0));
-      break;
-  }
-
-  return sorted;
-});
-
 // 时间框架市场数据（用于切换标的Tab）
 const marketTrends = computed(() => {
   // 为所有交易对和时间框架生成趋势数据
@@ -1090,6 +1211,7 @@ let timerInterval;
 let historyInterval;
 let candleInterval;
 let signalInterval;
+let trendRefreshInterval; // 趋势刷新定时器
 let drawings = [];
 let drawingMode = false;
 
@@ -1117,6 +1239,23 @@ const formatSignalTime = (createdAt) => {
   if (hours < 24) return `${hours}小时前`;
   const days = Math.floor(hours / 24);
   return `${days}天前`;
+};
+
+// 格式化倒计时 (h:m:s)
+const formatDuration = (ms) => {
+  if (ms <= 0) return '00:00';
+  const seconds = Math.floor((ms / 1000) % 60);
+  const minutes = Math.floor((ms / (1000 * 60)) % 60);
+  const hours = Math.floor((ms / (1000 * 60 * 60)) % 24);
+  
+  const s = seconds.toString().padStart(2, '0');
+  const m = minutes.toString().padStart(2, '0');
+  
+  if (hours > 0) {
+    const h = hours.toString().padStart(2, '0');
+    return `${h}:${m}:${s}`;
+  }
+  return `${m}:${s}`;
 };
 
 // 计算信号有效性和倒计时
@@ -1149,7 +1288,8 @@ const getRandomTrendDirection = (symbol = '') => {
 
 // 获取箭头显示（1-2个）
 const getTrendArrows = (strength, direction) => {
-  const arrowCount = strength >= 0.5 ? 2 : 1;
+  // 0.8以上为强趋势（2个箭头），否则为普通趋势（1个箭头）
+  const arrowCount = strength >= 0.8 ? 2 : 1;
   const arrow = direction > 0 ? '↑' : '↓';
   return arrow.repeat(arrowCount);
 };
@@ -1572,6 +1712,9 @@ watch(
 watch(
   () => selectedSymbol.value,
   () => {
+    // 更新market store中的selectedSymbol，这会清空旧的价格历史
+    marketStore.setSymbol(selectedSymbol.value);
+    
     interpolatedPrice.value = 0;
     if (series) {
       createSeries();
@@ -1684,6 +1827,14 @@ watch(
 
 onMounted(async () => {
   await nextTick();
+  
+  // 从localStorage恢复时间框架选择
+  const savedTimeframe = localStorage.getItem('tradeView_timeframe');
+  if (savedTimeframe) {
+    const timeframeValue = parseInt(savedTimeframe, 10);
+    setTimeframeByValue(timeframeValue);
+  }
+  
   if (!chartContainer.value) return;
 
   chart = createChart(chartContainer.value, {
@@ -1750,7 +1901,24 @@ onMounted(async () => {
   // 信号推送间隔 - 模拟实时信号
   signalInterval = setInterval(() => {
     pushNewSignal();
-  }, 12000); // 每12秒推送一条新信号
+  }, 30000); // 每30秒推送一条新信号
+
+  // 趋势刷新间隔 - 监控信号过期和复制人数变化，实时更新趋势
+  // 当最多人复制的信号过期或被新信号超越时，自动重新计算趋势
+  trendRefreshInterval = setInterval(() => {
+    const now = Date.now();
+    
+    // 检查是否有信号过期
+    let hasExpiredSignals = signalFeed.value.some(s => s.expiryTime <= now);
+    
+    if (hasExpiredSignals) {
+      // 移除过期信号
+      signalFeed.value = signalFeed.value.filter(s => s.expiryTime > now);
+      
+      // 强制重新渲染所有对应的趋势
+      // 因为计算属性会自动响应signalFeed的变化，所以无需手动刷新
+    }
+  }, 1000); // 每秒检查一次
 
   chart.subscribeClick((param) => {
     if (!drawingMode) return;
@@ -1772,6 +1940,7 @@ onUnmounted(() => {
   clearInterval(historyInterval);
   clearInterval(candleInterval);
   clearInterval(signalInterval);
+  clearInterval(trendRefreshInterval);
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
   window.removeEventListener('resize', handleResize);
   clearDrawings();
@@ -1895,62 +2064,125 @@ const handleSignalTrade = async (signal) => {
     // 递增 copied 计数（跟随 = 复制）
     signal.copied += 1;
     
+    // 检查该信号是否成为此[标的+时间框架]组合的最多人复制信号
+    // 如果是，趋势会自动刷新（因为getTrendForPair是响应式计算）
+    const sameGroupSignals = signalFeed.value.filter(s => 
+      s.symbol === signal.symbol && 
+      s.timeframe === signal.timeframe && 
+      s.expiryTime > Date.now() // 只考虑有效信号
+    );
+    if (sameGroupSignals.length > 0) {
+      const maxCopied = Math.max(...sameGroupSignals.map(s => s.copied));
+      if (signal.copied === maxCopied) {
+        // 该信号现在是最多人复制的，趋势已自动更新
+        console.log(`✓ 信号"${signal.title}"成为${signal.symbol}/${signal.timeframe}的主导信号`);
+      }
+    }
+    
     // 刷新数据
     marketStore.fetchActiveOrders();
     marketStore.fetchBalance();
     
-    // 显示成功反馈并切换到订单面板
+    // 显示成功反馈
     errorMsg.value = `✓ 信号交易执行: ${signal.action} ${signal.title} (${orderDuration}s)`;
-    activeRightModule.value = 'orders';
     
     // 3秒后清除提示
     setTimeout(() => {
       errorMsg.value = '';
     }, 3000);
   } catch (error) {
-    errorMsg.value = `⚠ 下单失败: ${error.response?.data?.error || error.message || 'Unknown error'}`;
+    const errorText = error.response?.data?.error || error.message || 'Unknown error';
+    
+    // 处理特定的业务错误
+    if (errorText.includes('too many open orders')) {
+      errorMsg.value = `⚠ 开仓订单过多，请先关闭一些订单后再试`;
+    } else if (errorText.includes('insufficient balance')) {
+      errorMsg.value = `⚠ 余额不足，请充值后再试`;
+    } else if (errorText.includes('invalid amount')) {
+      errorMsg.value = `⚠ 订单金额无效`;
+    } else {
+      errorMsg.value = `⚠ 下单失败: ${errorText}`;
+    }
   }
 };
 
 
 const pushNewSignal = () => {
-  // 新信号数据池
+  // 为每个 [标的 + 时间框架] 组合生成一个随机信号
   const now = Date.now();
-  const signalPool = [
-    { title: 'GBP/USD 上破', metric: 'RSI 65 · 突破阻力', confidence: 0.79, action: 'CALL', timing: '2m', symbol: 'GBPUSD', amount: 40, duration: 120, copied: 0, createdAt: now, validity: 120000, expiryTime: now + 120000 },
-    { title: 'ETH/USDT 下行', metric: '布林下轨测试', confidence: 0.75, action: 'PUT', timing: '3m', symbol: 'ETHUSDT', amount: 75, duration: 180, copied: 0, createdAt: now, validity: 180000, expiryTime: now + 180000 },
-    { title: 'Gold 反弹', metric: '动量 +0.8σ', confidence: 0.71, action: 'CALL', timing: '5m', symbol: 'XAUUSD', amount: 30, duration: 300, copied: 0, createdAt: now, validity: 300000, expiryTime: now + 300000 },
-    { title: 'US100 均线黄金交叉', metric: 'MA20 穿 MA50', confidence: 0.86, action: 'CALL', timing: '4m', symbol: 'US100', amount: 60, duration: 240, copied: 0, createdAt: now, validity: 240000, expiryTime: now + 240000 },
-    { title: 'Oil 下跌', metric: 'MACD 负值扩大', confidence: 0.73, action: 'PUT', timing: '2m', symbol: 'WTIUSD', amount: 45, duration: 120, copied: 0, createdAt: now, validity: 120000, expiryTime: now + 120000 },
-    { title: 'USDJPY 震荡', metric: 'RSI 50 · 中性信号', confidence: 0.68, action: 'CALL', timing: '1m', symbol: 'USDJPY', amount: 20, duration: 60, copied: 0, createdAt: now, validity: 60000, expiryTime: now + 60000 },
-    { title: 'S&P500 新高', metric: 'ADX 强势向上', confidence: 0.81, action: 'CALL', timing: '5m', symbol: 'US500', amount: 80, duration: 300, copied: 0, createdAt: now, validity: 300000, expiryTime: now + 300000 },
-  ];
-
-  // 随机选择一个新信号
-  const newSignal = signalPool[Math.floor(Math.random() * signalPool.length)];
+  const timeframes = ['M1', 'M3', 'M5', 'M30', 'H1', 'H4'];
+  const actions = ['CALL', 'PUT'];
   
-  // 检查是否已存在相同的信号(避免重复)
-  const exists = signalFeed.value.some(sig => sig.title === newSignal.title);
-  if (exists) {
-    return;
-  }
-
+  // 随机选择一个标的
+  const randomSymbol = tradingPairs.value[Math.floor(Math.random() * tradingPairs.value.length)];
+  
+  // 随机选择一个时间框架
+  const randomTimeframe = timeframes[Math.floor(Math.random() * timeframes.length)];
+  
+  // 随机选择方向
+  const randomAction = actions[Math.floor(Math.random() * actions.length)];
+  
+  // 随机选择强度 (1 或 2)
+  const randomStrength = Math.random() > 0.5 ? 2 : 1;
+  
+  // 随机生成跟踪人数 (100-2000)
+  const randomFollowers = Math.floor(Math.random() * 1900) + 100;
+  
+  // 随机设置有效期 (60s - 600s)
+  const validity = (Math.floor(Math.random() * 540) + 60) * 1000;
+  
+  // 生成信号标题和指标
+  const signalTitles = [
+    `${randomSymbol.symbol} 突破`,
+    `${randomSymbol.symbol} 反弹`,
+    `${randomSymbol.symbol} 拐点`,
+    `${randomSymbol.symbol} 加速`,
+    `${randomSymbol.symbol} 回调`,
+  ];
+  const title = signalTitles[Math.floor(Math.random() * signalTitles.length)];
+  
+  const metrics = [
+    'RSI 指标强势',
+    'MACD 金叉',
+    'MA 均线突破',
+    'Stoch 信号',
+    'CCI 极值',
+    'ATR 突破',
+    'Volume 突增',
+  ];
+  const metric = metrics[Math.floor(Math.random() * metrics.length)];
+  
+  const newSignal = {
+    title,
+    metric,
+    confidence: 0.6 + Math.random() * 0.3, // 0.6 - 0.9
+    action: randomAction,
+    timing: randomTimeframe.toLowerCase(),
+    symbol: randomSymbol.symbol,
+    timeframe: randomTimeframe,
+    strength: randomStrength,
+    amount: Math.floor(Math.random() * 150) + 25, // 25 - 175
+    duration: 60 * (Math.floor(Math.random() * 9) + 1), // 60s - 540s
+    followers: randomFollowers,
+    createdAt: now,
+    validity: validity,
+    expiryTime: now + validity,
+    isNew: true,
+  };
+  
   // 在列表头部插入新信号
-  signalFeed.value.unshift({
-    ...newSignal,
-    isNew: true, // 标记为新信号，用于动画
-  });
-
+  signalFeed.value.unshift(newSignal);
+  
   // 移除 isNew 标记以停止动画(500ms后)
   setTimeout(() => {
-    const idx = signalFeed.value.findIndex(s => s.title === newSignal.title);
+    const idx = signalFeed.value.findIndex(s => s.title === newSignal.title && s.createdAt === newSignal.createdAt);
     if (idx !== -1) {
       signalFeed.value[idx].isNew = false;
     }
   }, 500);
-
-  // 限制信号列表不超过20条
-  if (signalFeed.value.length > 20) {
+  
+  // 限制信号列表不超过50条
+  if (signalFeed.value.length > 50) {
     signalFeed.value.pop();
   }
 };
@@ -1972,6 +2204,37 @@ const pushNewSignal = () => {
   gap: 20px;
   --dock-width: clamp(68px, 7vw, 86px);
   --dock-offset: clamp(10px, 1.6vw, 18px);
+}
+
+/* 全局滚动条美化 */
+/* Chrome / Safari / Edge 滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(93, 247, 194, 0.25);
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(93, 247, 194, 0.45);
+}
+
+::-webkit-scrollbar-corner {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Firefox 滚动条 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(93, 247, 194, 0.25) rgba(255, 255, 255, 0.02);
 }
 
 .hero {
@@ -2338,7 +2601,7 @@ const pushNewSignal = () => {
   flex: 1;
   background: transparent;
   border: none;
-  padding: 10px 12px;
+  padding: 10px 12px 10px 36px;
   color: #fff;
   font-size: 15px;
   font-weight: 700;
@@ -3106,7 +3369,7 @@ const pushNewSignal = () => {
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.08);
   font-size: 11px;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   font-weight: 600;
   text-transform: uppercase;
@@ -3299,6 +3562,7 @@ const pushNewSignal = () => {
   z-index: 90;
   width: var(--dock-width);
   backdrop-filter: blur(14px);
+  overflow: visible;
 }
 
 .dock-title {
@@ -3314,7 +3578,8 @@ const pushNewSignal = () => {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
+  width: auto;
+  min-width: 100%;
   border: 1px solid transparent;
   background: transparent;
   color: #8fa1c4;
@@ -3323,6 +3588,34 @@ const pushNewSignal = () => {
   cursor: pointer;
   transition: all 0.2s;
   flex-direction: column;
+  position: relative;
+  overflow: visible;
+}
+
+.dock-badge {
+  position: absolute;
+  top: 0px;
+  right: 0px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  background: linear-gradient(135deg, #5df7c2 0%, #3dffb5 100%);
+  color: #0b0e14;
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(11, 14, 20, 0.95);
+  box-shadow: 0 2px 8px rgba(93, 247, 194, 0.4);
+  pointer-events: none;
+  line-height: 1;
+}
+
+.dock-badge-active {
+  background: linear-gradient(135deg, #5df7c2 0%, #3dffb5 100%);
+  box-shadow: 0 2px 12px rgba(93, 247, 194, 0.5);
 }
 
 .dock-btn:hover {
@@ -3495,6 +3788,173 @@ const pushNewSignal = () => {
   border-color: rgba(93, 247, 194, 0.4);
 }
 
+.market-trends-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0;
+}
+
+.section-header {
+  font-size: 12px;
+  font-weight: 700;
+  color: #8fa1c4;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0 0 8px 0;
+  border-bottom: 1px solid rgba(93, 247, 194, 0.1);
+}
+
+/* 时间框架网格 (参考图2: 3x4 布局) */
+.timeframe-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.timeframe-btn {
+  padding: 10px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #8fa1c4;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.timeframe-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(93, 247, 194, 0.3);
+  color: #fff;
+}
+
+.timeframe-btn.active {
+  background: rgba(93, 247, 194, 0.2);
+  color: #5df7c2;
+  border-color: rgba(93, 247, 194, 0.4);
+  box-shadow: 0 0 8px rgba(93, 247, 194, 0.2);
+}
+
+/* 交易标的列表 */
+.pairs-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* 美化滚动条 - Chrome/Safari/Edge */
+.pairs-list-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.pairs-list-container::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+}
+
+.pairs-list-container::-webkit-scrollbar-thumb {
+  background: rgba(93, 247, 194, 0.25);
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.pairs-list-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(93, 247, 194, 0.45);
+}
+
+/* Firefox 滚动条 */
+.pairs-list-container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(93, 247, 194, 0.25) rgba(255, 255, 255, 0.02);
+}
+
+.pair-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pair-list-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(93, 247, 194, 0.3);
+  transform: translateX(4px);
+}
+
+.pair-list-item.active {
+  background: rgba(93, 247, 194, 0.15);
+  border-color: rgba(93, 247, 194, 0.5);
+  box-shadow: inset 0 0 12px rgba(93, 247, 194, 0.1), 0 0 8px rgba(93, 247, 194, 0.15);
+}
+
+.pair-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.pair-symbol {
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.pair-display {
+  font-size: 11px;
+  color: #8fa1c4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pair-trend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pair-trend.trend-up {
+  color: #5df7c2;
+}
+
+.pair-trend.trend-up .trend-arrow {
+  color: #5df7c2;
+  font-weight: 800;
+}
+
+.pair-trend.trend-down {
+  color: #ff7b7b;
+}
+
+.pair-trend.trend-down .trend-arrow {
+  color: #ff7b7b;
+  font-weight: 800;
+}
+
+.trend-arrow {
+  font-size: 14px;
+  line-height: 1;
+}
+
 .market-pairs-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -3593,7 +4053,7 @@ const pushNewSignal = () => {
 .pending-row,
 .social-row {
   display: grid;
-  grid-template-columns: 1.2fr 1.2fr 1fr 1fr 1.3fr 1.3fr;
+  grid-template-columns: 1.5fr 1fr 1fr 1.5fr;
   align-items: center;
   justify-content: space-between;
   background: rgba(255, 255, 255, 0.01);
@@ -3683,29 +4143,17 @@ const pushNewSignal = () => {
   justify-content: center;
 }
 
-.copies-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 10px;
-  border-radius: 4px;
-  background: rgba(93, 247, 194, 0.1);
-  color: #8fa1c4;
-  font-size: 12px;
-  font-weight: 600;
-  border: 1px solid rgba(93, 247, 194, 0.2);
-}
-
 /* Action Cell */
 .action-cell {
   justify-content: flex-end;
 }
 
 .btn-follow {
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 6px 14px;
+  padding: 4px 12px;
   border: none;
   border-radius: 6px;
   background: transparent;
@@ -3717,6 +4165,27 @@ const pushNewSignal = () => {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border: 1.5px solid currentColor;
+  height: 38px;
+  min-width: 80px;
+}
+
+.btn-action-text {
+  font-size: 12px;
+  line-height: 1.2;
+  color: #ffffff;
+}
+
+.btn-timer-text {
+  font-size: 10px;
+  color: #ffffff;
+  opacity: 1;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 2px;
 }
 
 .btn-follow:hover:not(:disabled) {
@@ -3734,7 +4203,7 @@ const pushNewSignal = () => {
 }
 
 .btn-follow.btn-call {
-  color: #5df7c2;
+  color: #fff;
   border-color: #5df7c2;
 }
 
@@ -3743,7 +4212,7 @@ const pushNewSignal = () => {
 }
 
 .btn-follow.btn-put {
-  color: #ff7b7b;
+  color: #fff;
   border-color: #ff7b7b;
 }
 
@@ -3761,44 +4230,9 @@ const pushNewSignal = () => {
   font-weight: 600;
 }
 
-/* Expiry Cell */
-.expiry-cell {
-  justify-content: center;
-}
-
-.expiry-timer {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.03);
-  color: #8fa1c4;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.expiry-timer svg {
-  color: #5df7c2;
-}
-
-.expiry-badge {
-  display: inline-flex;
-  padding: 4px 10px;
-  border-radius: 4px;
-  background: rgba(255, 123, 123, 0.08);
-  color: #ff7b7b;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.expiry-badge.expired {
-  opacity: 0.7;
-}
-
 /* Time Cell */
 .time-cell {
-  justify-content: flex-end;
+  justify-content: center;
   color: #8fa1c4;
   font-size: 12px;
 }
@@ -3806,6 +4240,37 @@ const pushNewSignal = () => {
 .time-text {
   font-weight: 500;
 }
+
+/* Symbol Wrapper & Badge */
+.symbol-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.copies-badge-small {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(93, 247, 194, 0.1);
+  border: 1px solid rgba(93, 247, 194, 0.2);
+  color: #5df7c2;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+
+/* Trend Arrows */
+.trend-arrows {
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: -2px;
+}
+.trend-arrows.up { color: #5df7c2; }
+.trend-arrows.down { color: #ff7b7b; }
 
 /* Signal List Container */
 .signal-list {
@@ -3817,27 +4282,12 @@ const pushNewSignal = () => {
   overflow: hidden;
 }
 
-/* Signal Table Header */
-.signal-header-row {
-  display: grid;
-  grid-template-columns: 1.2fr 1.2fr 1fr 1fr 1.3fr 1.3fr;
-  align-items: center;
-  padding: 12px 16px;
-  gap: 12px;
-  background: linear-gradient(90deg, rgba(93, 247, 194, 0.08), rgba(93, 247, 194, 0.03));
-  border-bottom: 1px solid rgba(93, 247, 194, 0.15);
-  font-size: 12px;
+/* Symbol Text */
+.symbol-text {
   font-weight: 700;
-  color: #8fa1c4;
-  text-transform: uppercase;
+  color: #fff;
+  font-size: 13px;
   letter-spacing: 0.5px;
-}
-
-.header-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  opacity: 0.8;
 }
 
 /* Signal Controls */

@@ -3,12 +3,30 @@ import api from '../api/axios';
 
 export const useMarketStore = defineStore('market', {
   state: () => ({
-    allowedSymbols: ['EURUSD', 'BTCUSDT', 'ETHUSDT', 'S1'],
+    // 扩展支持所有交易对
+    allowedSymbols: [
+      'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'NZDUSD', 'EURGBP', 'EURJPY', 'GBPJPY', 'AUDJPY',
+      'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'SOLUSDT', 'DOGEUSDT', 'DOTUSDT',
+      'XAUUSD', 'XAGUSD', 'WTIUSD', 'NATGAS',
+      'US500', 'US100', 'US30', 'DE40', 'UK100', 'JP225',
+      'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX'
+    ],
+    // 为每个交易对存储其初始价格（用于模拟）
+    symbolPrices: {
+      'EURUSD': 1.0850, 'GBPUSD': 1.2680, 'USDJPY': 149.50, 'AUDUSD': 0.6750, 'USDCAD': 1.3650, 
+      'NZDUSD': 0.6150, 'EURGBP': 0.8560, 'EURJPY': 161.50, 'GBPJPY': 187.20, 'AUDJPY': 100.80,
+      'BTCUSDT': 62450, 'ETHUSDT': 2850, 'BNBUSDT': 610, 'XRPUSDT': 0.52, 'ADAUSDT': 0.98, 
+      'SOLUSDT': 138, 'DOGEUSDT': 0.32, 'DOTUSDT': 8.50,
+      'XAUUSD': 2285, 'XAGUSD': 27.50, 'WTIUSD': 78.50, 'NATGAS': 2.95,
+      'US500': 5810, 'US100': 18950, 'US30': 38620, 'DE40': 17850, 'UK100': 8120, 'JP225': 33200,
+      'AAPL': 189.50, 'MSFT': 415, 'GOOGL': 185, 'AMZN': 195, 'TSLA': 245, 'META': 480, 'NVDA': 875, 'NFLX': 680
+    },
     selectedSymbol: 'EURUSD',
     currentPrice: 0,
     priceHistory: [], // Array of { time, value } for chart
     isConnected: false,
     socket: null,
+    mockInterval: null, // 本地模拟价格定时器
     activeOrders: [],
     orderHistory: [],
     historyHasMore: true,
@@ -18,6 +36,14 @@ export const useMarketStore = defineStore('market', {
     timeframeSec: 5,
   }),
   actions: {
+    // 为指定的交易对生成模拟价格
+    generateMockPrice(symbol) {
+      const basePrice = this.symbolPrices[symbol] || 100;
+      // 每次随机波动 0.5% - 1% 范围内
+      const volatility = (Math.random() - 0.5) * 0.02;
+      return basePrice * (1 + volatility);
+    },
+    
     connect() {
       if (this.socket) return;
 
@@ -92,11 +118,48 @@ export const useMarketStore = defineStore('market', {
           this.connect();
         }, 3000);
       };
+      
+      // 同时启动本地模拟价格生成（备选方案）
+      this.startMockPriceGenerator();
     },
+    
+    // 启动本地模拟价格生成器（每500ms生成一个新价格）
+    startMockPriceGenerator() {
+      if (this.mockInterval) {
+        clearInterval(this.mockInterval);
+      }
+      
+      this.mockInterval = setInterval(() => {
+        const mockPrice = this.generateMockPrice(this.selectedSymbol);
+        this.currentPrice = mockPrice;
+        
+        const time = Math.floor(Date.now() / 1000);
+        
+        if (this.priceHistory.length > 0) {
+          const lastTime = this.priceHistory[this.priceHistory.length - 1].time;
+          if (time <= lastTime) {
+            this.priceHistory[this.priceHistory.length - 1] = { time, value: mockPrice };
+          } else {
+            this.priceHistory.push({ time, value: mockPrice });
+          }
+        } else {
+          this.priceHistory.push({ time, value: mockPrice });
+        }
+        
+        if (this.priceHistory.length > 1000) {
+          this.priceHistory.shift();
+        }
+      }, 500); // 每500ms更新一次价格
+    },
+    
     disconnect() {
       if (this.socket) {
         this.socket.close();
         this.socket = null;
+      }
+      if (this.mockInterval) {
+        clearInterval(this.mockInterval);
+        this.mockInterval = null;
       }
     },
     setSymbol(symbol) {
@@ -114,16 +177,19 @@ export const useMarketStore = defineStore('market', {
     },
     async placeOrder(symbol, direction, amount, duration) {
       try {
-        const response = await api.post('/trade/order', {
+        const orderData = {
           symbol,
-          direction,
+          direction: direction.toUpperCase(), // 确保方向是大写（后端要求 CALL 或 PUT）
           amount: parseFloat(amount),
           duration: parseInt(duration),
           client_price: this.currentPrice || undefined,
-        });
+        };
+        console.log('Sending order:', orderData);
+        const response = await api.post('/trade/order', orderData);
         return response.data;
       } catch (error) {
         console.error('Order failed:', error);
+        console.error('Response:', error.response?.data);
         throw error;
       }
     },

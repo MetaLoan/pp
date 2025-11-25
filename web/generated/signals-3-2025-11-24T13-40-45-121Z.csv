@@ -1,0 +1,4 @@
+title,metric,confidence,action,timing,symbol,timeframe,strength,amount,duration,followers,copied,createdAt,validity,expiryTime,isNew
+"XAUUSD 突破","分时强力",0.86,"CALL","m30","XAUUSD","M30",1,85,2867,1385,0,1763991645120,2142545,1763993787665,true
+"XAUUSD 反弹","Trend 确认",0.68,"PUT","m30","XAUUSD","M30",2,46,2991,1796,7,1763991585120,3475346,1763995060466,false
+"ETHUSDT 拐点","Trend 确认",0.77,"CALL","m30","ETHUSDT","M30",1,163,1977,967,5,1763991525120,2599310,1763994124430,false
