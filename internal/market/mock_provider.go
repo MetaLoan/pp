@@ -1,6 +1,7 @@
 package market
 
 import (
+	"log"
 	"math/rand"
 	"sync"
 	"time"
@@ -36,6 +37,10 @@ func (m *MockProvider) tick() {
 			pct := (rand.Float64()*2 - 1) * 0.00005
 			price += price * pct
 			m.prices[sym] = price
+			// Debug: log EURUSD updates to trace unexpected large jumps
+			if sym == "EURUSD" || sym == "EUR/USD" {
+				log.Printf("[mock] tick %s -> %.8f (pct %.8f)", sym, price, pct)
+			}
 		}
 		m.mu.Unlock()
 	}
