@@ -51,3 +51,25 @@ func (h *MarketHandler) GetCandles(c *gin.Context) {
 	candles := core.GlobalMarket.GetCandles(symbol, intervalSec, limit)
 	c.JSON(http.StatusOK, gin.H{"candles": candles})
 }
+
+// GetHistory returns raw server-side ticks for a symbol (debug)
+func (h *MarketHandler) GetHistory(c *gin.Context) {
+	symbol := c.Query("symbol")
+	if symbol == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "symbol required"})
+		return
+	}
+	limit := 50
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	hist := core.GetPriceHistory(symbol, limit)
+	// convert to simple JSON array
+	out := make([]map[string]interface{}, 0, len(hist))
+	for _, p := range hist {
+		out = append(out, map[string]interface{}{"symbol": p.Symbol, "price": p.Price, "timestamp": p.Timestamp})
+	}
+	c.JSON(http.StatusOK, gin.H{"history": out})
+}

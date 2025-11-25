@@ -9,15 +9,15 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	Redis    RedisConfig
-	Log      LogConfig
-	JWT      JWTConfig
-	Trading  TradingConfig
-	Market   MarketConfig
+	Server     ServerConfig
+	Database   DatabaseConfig
+	Redis      RedisConfig
+	Log        LogConfig
+	JWT        JWTConfig
+	Trading    TradingConfig
+	Market     MarketConfig
 	Settlement SettlementConfig
-	Funds    FundsConfig
+	Funds      FundsConfig
 }
 
 type ServerConfig struct {
@@ -61,10 +61,10 @@ type TradingConfig struct {
 type MarketConfig struct {
 	External struct {
 		Provider string
-		BaseURL string
-		Path    string
-		Timeout string
-		APIKey  string
+		BaseURL  string
+		Path     string
+		Timeout  string
+		APIKey   string
 	}
 	Breaker struct {
 		FailThreshold int
@@ -77,9 +77,9 @@ type MarketConfig struct {
 }
 
 type SettlementConfig struct {
-	Interval   string
-	BatchSize  int
-	LockKey    int64
+	Interval  string
+	BatchSize int
+	LockKey   int64
 }
 
 type FundsConfig struct {

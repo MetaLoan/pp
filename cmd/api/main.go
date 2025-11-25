@@ -66,6 +66,8 @@ func main() {
 
 		// Public market data
 		api.GET("/market/candles", marketHandler.GetCandles)
+		// Debug: raw tick history for a symbol
+		api.GET("/market/history", marketHandler.GetHistory)
 		// Debug: current last price for a symbol
 		api.GET("/market/price", marketHandler.GetPrice)
 	}

@@ -268,6 +268,30 @@ func GetLastPrice(symbol string) (MarketData, bool) {
 	return d, ok
 }
 
+// GetPriceHistory returns up to `limit` most recent raw ticks for a symbol.
+func GetPriceHistory(symbol string, limit int) []MarketData {
+	if GlobalMarket == nil {
+		return nil
+	}
+	GlobalMarket.mu.RLock()
+	defer GlobalMarket.mu.RUnlock()
+	hist := GlobalMarket.priceHistory[symbol]
+	if len(hist) == 0 || limit <= 0 {
+		// return a copy
+		out := make([]MarketData, len(hist))
+		copy(out, hist)
+		return out
+	}
+	if limit >= len(hist) {
+		out := make([]MarketData, len(hist))
+		copy(out, hist)
+		return out
+	}
+	out := make([]MarketData, limit)
+	copy(out, hist[len(hist)-limit:])
+	return out
+}
+
 // GetCandles aggregates in-memory ticks into OHLC candles.
 func (m *MarketEngine) GetCandles(symbol string, intervalSec int, limit int) []map[string]interface{} {
 	if intervalSec <= 0 {

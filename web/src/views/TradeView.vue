@@ -803,7 +803,7 @@ const showDepositModal = ref(false);
 const signalSortBy = ref('confidence'); // 'confidence' | 'timing' | 'new'
 const signalFilterAction = ref('all'); // 'all' | 'CALL' | 'PUT'
 const signalFilterTiming = ref('all'); // 'all' | '1m' | '2m' | '3m' | '4m' | '5m'
-const chartType = ref('line'); // line | area | candle
+const chartType = ref('candle'); // line | area | candle
 const timeframe = ref(60); // seconds per bar (default M1)
 const showSMA = ref(false);
 const showEMA = ref(false);
@@ -1205,6 +1205,7 @@ const settings = ref({
 });
 
 let currentBar = null; // { time, open, high, low, close }
+let lastRenderedCandlesHash = null; // Cache to avoid re-processing same data
 
 let chart;
 let series;
@@ -1220,7 +1221,7 @@ let drawings = [];
 let drawingMode = false;
 
 const interpolatedPrice = ref(0);
-let animationFrameId = null;
+let animationTimer = null; // interval id for 200ms price updates
 let lastRenderedCandleCount = 0;
 let lastRenderedCandleTime = 0;
 const disableSmoothing = ref(false); // toggle to disable interpolation for debugging
@@ -1484,9 +1485,11 @@ const processTick = (price, time) => {
   
   const tf = timeframe.value;
   const barTime = Math.floor(time / tf) * tf;
-  
+
+  let isNewBar = false;
   if (!currentBar || barTime > currentBar.time) {
-    // New bar
+    // New bar timeframe - create new bar
+    isNewBar = true;
     currentBar = {
       time: barTime,
       open: price,
@@ -1495,32 +1498,36 @@ const processTick = (price, time) => {
       close: price
     };
   } else {
-    // Update current bar
+    // Update current bar (local tracking)
     currentBar.high = Math.max(currentBar.high, price);
     currentBar.low = Math.min(currentBar.low, price);
     currentBar.close = price;
   }
 
-  if (series) {
-    if (chartType.value === 'candle') {
-      const item = currentBar;
-      // Only update the forming/most-recent candle. Do not overwrite already-closed candles
-      if (lastRenderedCandleTime === 0 || item.time >= lastRenderedCandleTime) {
-        try {
-          series.update(item);
-        } catch (e) {
-          // ignore time order errors
-        }
-      } else {
-        // ignore updates to older buckets
+  // Always update displayed price
+  interpolatedPrice.value = price;
+
+  // For candle charts: always update smoothly
+  if (series && chartType.value === 'candle') {
+    try {
+      if (isNewBar && currentBar.time > lastRenderedCandleTime) {
+        // New candle forming: just update it (lightweight operation)
+        lastRenderedCandleTime = currentBar.time;
       }
-    } else {
-      const item = { time: currentBar.time, value: currentBar.close };
-      try {
-        series.update(item);
-      } catch (e) {
-        // ignore time order errors
-      }
+      // Update the current forming candle in real-time
+      series.update(currentBar);
+    } catch (e) {
+      // ignore time order errors
+    }
+  }
+
+  // For non-candle charts (line/area), still update live
+  if (series && chartType.value !== 'candle') {
+    const item = { time: currentBar.time, value: price };
+    try {
+      series.update(item);
+    } catch (e) {
+      // ignore time order errors
     }
   }
 };
@@ -1649,71 +1656,101 @@ const renderCandles = (updatePrice = true) => {
       c.close != null
   );
 
-  // Sanitize and ensure numeric types and ascending time order before sending to chart
-  const sanitized = candles
-    .map((c) => ({
-      time: Number(c.time),
-      open: Number(c.open),
-      high: Number(c.high),
-      low: Number(c.low),
-      close: Number(c.close),
-    }))
-    .filter((c) => Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close));
+  if (candles.length === 0) return;
 
-  // Deduplicate by time keeping the last occurrence for each timestamp, then sort ascending
-  const byTime = new Map();
-  for (const c of sanitized) byTime.set(c.time, c);
-  const uniq = Array.from(byTime.values()).sort((a, b) => a.time - b.time);
+  // Quick check: if data hasn't changed, skip processing
+  // This prevents unnecessary recalculations during high-frequency updates
+  const currentHash = candles.length > 0 ? 
+    `${candles[candles.length - 1].time}:${candles[candles.length - 1].close}:${candles.length}` : 
+    null;
+  
+  if (lastRenderedCandlesHash === currentHash) {
+    return; // Data unchanged, skip processing
+  }
+  lastRenderedCandlesHash = currentHash;
 
-  if (updatePrice) {
-    // Debug info to help diagnose cases where only 1-2 candles render
-    // eslint-disable-next-line no-console
-    console.debug('[renderCandles] count:', uniq.length, 'first:', uniq[0], 'last:', uniq[uniq.length - 1], 'lastRendered:', lastRenderedCandleCount, 'lastRenderedTime:', lastRenderedCandleTime);
+  // Sanitize only the last candle (for quick sync check)
+  const lastC = candles[candles.length - 1];
+  const lastCandle = {
+    time: Number(lastC.time),
+    open: Number(lastC.open),
+    high: Number(lastC.high),
+    low: Number(lastC.low),
+    close: Number(lastC.close),
+  };
 
-    // If we haven't rendered before, or we have a reasonably-sized dataset, replace full data.
-    // Otherwise, when backend occasionally returns very small arrays (1-2 candles), just update the latest candle
-    // to avoid collapsing the chart to a couple of bars.
-    if (lastRenderedCandleCount === 0 || uniq.length >= 3) {
+  if (!Number.isFinite(lastCandle.time) || !Number.isFinite(lastCandle.close)) {
+    return; // Invalid data
+  }
+
+  // Check if we're out of sync with the server
+  if (lastCandle.time > lastRenderedCandleTime) {
+    // Server has new candles we haven't rendered yet
+    // Full re-render needed to catch up
+    const sanitized = candles
+      .map((c) => ({
+        time: Number(c.time),
+        open: Number(c.open),
+        high: Number(c.high),
+        low: Number(c.low),
+        close: Number(c.close),
+      }))
+      .filter((c) => Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close));
+
+    const byTime = new Map();
+    for (const c of sanitized) byTime.set(c.time, c);
+    const uniq = Array.from(byTime.values()).sort((a, b) => a.time - b.time);
+
+    if (uniq.length > 0) {
       series.setData(uniq);
       lastRenderedCandleCount = uniq.length;
-      lastRenderedCandleTime = uniq[uniq.length - 1]?.time || lastRenderedCandleTime;
-    } else {
-      // uniq.length is 1 or 2 but we previously had more candles: update only the latest point
-      const last = uniq[uniq.length - 1];
-      if (last) {
-        try {
-          // Only update if this timestamp is the current (>= lastRenderedCandleTime) to avoid rewriting closed candles
-          if (last.time >= lastRenderedCandleTime) {
-            series.update(last);
-            lastRenderedCandleTime = Math.max(lastRenderedCandleTime, last.time);
-          } else {
-            // Ignore older timestamps
-            console.debug('[renderCandles] ignoring older candle update', last.time, 'currentLast', lastRenderedCandleTime);
-          }
-        } catch (e) {
-          // Fallback to setData if update fails for any reason
-          series.setData(uniq);
-          lastRenderedCandleTime = uniq[uniq.length - 1]?.time || lastRenderedCandleTime;
-        }
-      }
-      // keep lastRenderedCandleCount unchanged (we don't shrink history here)
+      lastRenderedCandleTime = uniq[uniq.length - 1].time;
+      currentBar = { ...uniq[uniq.length - 1] };
+      interpolatedPrice.value = currentBar.close;
     }
-
-    if (candles.length > 1) {
-      const last = candles[candles.length - 1];
-      const prev = candles[candles.length - 2];
-      isPriceUp.value = last.close >= prev.close;
+  } else if (lastCandle.time === lastRenderedCandleTime) {
+    // Current candle: server might have a slightly different OHLC than our local tick calc
+    // Sync it only if it's significantly different (prevents constant micro-syncs)
+    const diff = Math.abs(lastCandle.close - currentBar.close);
+    if (diff > Math.abs(currentBar.close) * 0.001) { // More than 0.1% difference
+      series.update(lastCandle);
+      currentBar = { ...lastCandle };
+      interpolatedPrice.value = lastCandle.close;
     }
   }
 
-  if (smaSeries) {
-    const data = showSMA.value ? computeSMA(sanitized, smaPeriod.value) : [];
-    smaSeries.setData(data);
+  if (updatePrice && candles.length > 1) {
+    const last = candles[candles.length - 1];
+    const prev = candles[candles.length - 2];
+    isPriceUp.value = last.close >= prev.close;
   }
-  if (emaSeries) {
-    const data = showEMA.value ? computeEMA(sanitized, smaPeriod.value) : [];
-    emaSeries.setData(data);
+
+  // Update moving averages if needed
+  if (smaSeries || emaSeries) {
+    const sanitized = candles
+      .map((c) => ({
+        time: Number(c.time),
+        open: Number(c.open),
+        high: Number(c.high),
+        low: Number(c.low),
+        close: Number(c.close),
+      }))
+      .filter((c) => Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close));
+
+    if (smaSeries) {
+      const data = showSMA.value ? computeSMA(sanitized, smaPeriod.value) : [];
+      smaSeries.setData(data);
+    }
+    if (emaSeries) {
+      const data = showEMA.value ? computeEMA(sanitized, smaPeriod.value) : [];
+      emaSeries.setData(data);
+    }
   }
+
+  // Ensure animation timer is running
+  try {
+    startAnimationTimerIfNeeded();
+  } catch (e) {}
 };
 
 const createSeries = () => {
@@ -1730,6 +1767,7 @@ const createSeries = () => {
     chart.removeSeries(emaSeries);
     emaSeries = null;
   }
+  lastRenderedCandlesHash = null; // Reset cache when creating new series
   const baseOptions = {
     priceFormat: { type: 'price', precision: pricePrecision.value, minMove: 1 / Math.pow(10, pricePrecision.value) },
   };
@@ -1784,6 +1822,7 @@ watch(
     marketStore.setSymbol(selectedSymbol.value);
     
     interpolatedPrice.value = 0;
+    lastRenderedCandlesHash = null; // Reset cache when symbol changes
     if (series) {
       createSeries();
     }
@@ -1833,12 +1872,9 @@ watch(
   }
 );
 
-const animatePrice = () => {
+const animatePriceTick = () => {
   const target = marketStore.currentPrice;
-  if (!target) {
-    animationFrameId = null;
-    return;
-  }
+  if (!target) return; // nothing to do yet
 
   if (interpolatedPrice.value === 0) {
     interpolatedPrice.value = target;
@@ -1846,11 +1882,8 @@ const animatePrice = () => {
 
   const diff = target - interpolatedPrice.value;
   // Debug: show raw vs interpolated
-  // eslint-disable-next-line no-console
-  console.debug('[animatePrice] target:', target, 'interp:', interpolatedPrice.value, 'diff:', diff, 'smoothing:', disableSmoothing.value ? 0 : smoothingFactor.value);
 
   if (disableSmoothing.value) {
-    // apply immediately
     interpolatedPrice.value = target;
   } else {
     if (Math.abs(diff) < 0.00001) {
@@ -1864,19 +1897,21 @@ const animatePrice = () => {
   const tickTime = marketStore.currentTickTime || Math.floor(Date.now() / 1000);
   // Update chart with interpolated price using server timestamp
   processTick(interpolatedPrice.value, tickTime);
-
-  animationFrameId = requestAnimationFrame(animatePrice);
 };
 
-watch(
-  () => marketStore.currentPrice,
-  (newPrice) => {
-    if (newPrice && !animationFrameId) {
-      animatePrice();
+const startAnimationTimerIfNeeded = () => {
+  if (animationTimer) return;
+  // start 200ms periodic updates
+  animationTimer = setInterval(() => {
+    try {
+      animatePriceTick();
+    } catch (e) {
+      // error handling
     }
-  },
-  { immediate: true }
-);
+  }, 200);
+};
+
+// NOTE: the periodic 200ms update is started in onMounted to align with backend mock tick rate.
 
 watch(
   () => chartType.value,
@@ -1976,6 +2011,9 @@ onMounted(async () => {
 
   restartCandleInterval();
 
+  // Start animation timer for smooth price updates
+  startAnimationTimerIfNeeded();
+
   // 信号推送间隔 - 模拟实时信号
   signalInterval = setInterval(() => {
     pushNewSignal();
@@ -1998,6 +2036,9 @@ onMounted(async () => {
     }
   }, 1000); // 每秒检查一次
 
+  // Animation timer will be started once candles are rendered (see renderCandles())
+  // to avoid racing the initial candle dataset load. Use startAnimationTimerIfNeeded().
+
   chart.subscribeClick((param) => {
     if (!drawingMode) return;
     const price = currentPrice.value || (param.seriesData && param.seriesData.get(series)?.close);
@@ -2019,6 +2060,7 @@ onUnmounted(() => {
   clearInterval(candleInterval);
   clearInterval(signalInterval);
   clearInterval(trendRefreshInterval);
+  clearInterval(animationTimer);
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
   window.removeEventListener('resize', handleResize);
   clearDrawings();
@@ -2036,10 +2078,13 @@ const handleResize = () => {
 
 const restartCandleInterval = () => {
   if (candleInterval) clearInterval(candleInterval);
-  const ms = Math.max(timeframe.value * 1000, 1000);
+  // Refresh candles frequently to catch up with server state if needed
+  // But renderCandles() is now mostly a no-op if data is in sync, so this won't cause stutter
+  const tf = timeframe.value;
+  const refreshInterval = Math.max(Math.floor(tf * 1000 / 2), 1000); // Every half timeframe or 1s
   candleInterval = setInterval(() => {
     refreshCandles();
-  }, ms);
+  }, refreshInterval);
 };
 
 const handleTrade = async (direction) => {

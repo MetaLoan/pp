@@ -69,10 +69,6 @@ export const useMarketStore = defineStore('market', {
           const data = JSON.parse(event.data);
           // data format: { symbol: "EURUSD", price: 1.0503, timestamp: 1716288000000 }
 
-          // Debug: log raw websocket ticks (temporarily)
-          // eslint-disable-next-line no-console
-          console.debug('[WS] tick', data);
-
           if (data.symbol !== this.selectedSymbol) {
             // Ignore other symbols for now; could be extended to per-symbol cache
             return;
