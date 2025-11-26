@@ -6488,4 +6488,33 @@ button:focus-visible,
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
 }
+
+.load-more {
+  width: 100%;
+  padding: 12px;
+  margin-top: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #8fa1c4;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.load-more:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.load-more:active {
+  transform: translateY(0);
+  background: rgba(255, 255, 255, 0.05);
+}
 </style>
