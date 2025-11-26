@@ -547,20 +547,33 @@
                   <Layers :size="48" stroke-width="1" />
                   <span>No active trades</span>
                 </div>
-                <div v-else class="order-item" v-for="order in activeOrders" :key="order.id">
-                  <div class="order-header">
-                    <span class="symbol">{{ order.asset_symbol }}</span>
-                    <span :class="['direction', order.direction.toLowerCase()]">
-                      <component :is="order.direction === 'CALL' ? ArrowUpRight : ArrowDownRight" :size="16" />
-                      {{ order.direction }}
-                    </span>
+                <div v-else class="active-trade-card compact" v-for="order in activeOrders" :key="order.id">
+                  <div class="trade-card-row main-row">
+                    <div class="card-left">
+                      <strong class="asset-name">{{ order.asset_symbol }}</strong>
+                      <span :class="['direction-tag-compact', order.direction.toLowerCase()]">
+                        {{ order.direction === 'CALL' ? '↑' : '↓' }}
+                      </span>
+                    </div>
+                    <div class="card-right">
+                      <div class="timer-compact" :class="{ 'urgent': getTimeLeft(order) <= 10 }">
+                        {{ getTimeLeft(order) }}s
+                      </div>
+                    </div>
                   </div>
-                  <div class="order-details">
-                    <div>Entry: {{ formatPrice(order.open_price, order.asset_symbol) }}</div>
-                    <div>Amount: ${{ order.amount }}</div>
-                    <div class="timer"><Clock :size="12" /> {{ getTimeLeft(order) }}s</div>
-                    <div class="pnl" :class="getPnlClass(order)">
-                      Est. {{ getEstimatedPnl(order) }}
+                  
+                  <div class="trade-card-row sub-row">
+                    <div class="info-group">
+                      <span class="value-compact">${{ order.amount }}</span>
+                      <span class="separator">|</span>
+                      <span class="label-compact">Entry</span>
+                      <span class="value-compact mono">{{ formatPrice(order.open_price, order.asset_symbol) }}</span>
+                    </div>
+                    <div class="info-group">
+                      <span class="label-compact">Est.</span>
+                      <span class="value-compact pnl-value" :class="getPnlClass(order)">
+                        {{ getEstimatedPnl(order) }}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -582,22 +595,31 @@
                   <History :size="48" stroke-width="1" />
                   <span>No history yet</span>
                 </div>
-                <div v-else class="order-item" v-for="order in orderHistory" :key="order.id">
-                  <div class="order-header">
-                    <span class="symbol">{{ order.asset_symbol }}</span>
-                    <span class="status" :class="statusClass(order.status)">{{ order.status }}</span>
-                  </div>
-                  <div class="order-details">
-                    <div>
-                      <strong :class="['direction', order.direction.toLowerCase()]">
-                        {{ order.direction }}
-                      </strong>
+                <div v-else class="active-trade-card compact history-card" v-for="order in orderHistory" :key="order.id">
+                  <div class="trade-card-row main-row">
+                    <div class="card-left">
+                      <strong class="asset-name">{{ order.asset_symbol }}</strong>
+                      <span :class="['direction-tag-compact', order.direction.toLowerCase()]">
+                        {{ order.direction === 'CALL' ? '↑' : '↓' }}
+                      </span>
+                      <span class="status-text" :class="statusClass(order.status)">{{ order.status }}</span>
                     </div>
-                    <div>Entry: {{ formatPrice(order.open_price, order.asset_symbol) }}</div>
-                    <div>Exit: {{ order.close_price ? formatPrice(order.close_price, order.asset_symbol) : '--' }}</div>
-                    <div>Amount: ${{ order.amount }}</div>
-                    <div>PnL: <span :class="statusClass(order.status)">{{ formatPnl(order) }}</span></div>
-                    <div>{{ order.close_time ? new Date(order.close_time).toLocaleTimeString() : '--' }}</div>
+                    <div class="card-right">
+                      <span class="label-compact">{{ order.close_time ? new Date(order.close_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'}) : '--' }}</span>
+                    </div>
+                  </div>
+                  
+                  <div class="trade-card-row sub-row">
+                    <div class="info-group">
+                      <span class="value-compact">${{ order.amount }}</span>
+                      <span class="separator">|</span>
+                      <span class="label-compact">Entry</span>
+                      <span class="value-compact mono">{{ formatPrice(order.open_price, order.asset_symbol) }}</span>
+                    </div>
+                    <div class="info-group">
+                      <span class="label-compact">PnL</span>
+                      <span class="value-compact pnl-value" :class="statusClass(order.status)">{{ formatPnl(order) }}</span>
+                    </div>
                   </div>
                 </div>
                 <button v-if="orderHistory.length > 0 && marketStore.historyHasMore" class="load-more" @click="loadMoreHistory">
@@ -718,7 +740,10 @@
                   @click="selectedSymbol = pair.symbol">
                   <div class="pair-main">
                     <span class="pair-symbol">{{ pair.symbol }}</span>
-                    <span class="pair-display">{{ pair.display }}</span>
+                    <div class="pair-type-tag">
+                      <component :is="getCategoryConfig(pair.category).icon" :size="10" />
+                      <span>{{ getCategoryConfig(pair.category).label }}</span>
+                    </div>
                   </div>
                   <div v-if="getTrendForPair(pair.symbol)" :class="['pair-trend', getTrendForPair(pair.symbol).direction === 'CALL' ? 'trend-up' : 'trend-down']">
                     <span class="trend-arrow">{{ getTrendForPair(pair.symbol).direction === 'CALL' ? '↑' : '↓' }}{{ getTrendForPair(pair.symbol).strength > 1 ? getTrendForPair(pair.symbol).direction === 'CALL' ? '↑' : '↓' : '' }}</span>
@@ -871,7 +896,7 @@ import {
   MoreHorizontal, PenTool, Grid, Sliders, X, Check, Star, Search,
   Minus, MoreVertical, Square,
   ShoppingCart, Award, Trophy, MessageCircle, HelpCircle, User, Gem,
-  Antenna, Users, Target, Hourglass, Keyboard
+  Antenna, Users, Target, Hourglass, Keyboard, Bitcoin
 } from 'lucide-vue-next';
 import { useMarketStore } from '../stores/market';
 import api from '../api/axios';
@@ -901,9 +926,7 @@ const timeframeOptions = [1, 5, 15, 30, 60, 300, 600]; // Keep for logic mapping
 
 const indicatorSeriesMap = new Map();
 const activeIndicators = reactive({});
-const selectedIndicatorId = ref(
-  indicatorsCatalog.find((indicator) => indicator.supported)?.id || null
-);
+const selectedIndicatorId = ref(null);
 
 const selectIndicator = (indicatorId) => {
   selectedIndicatorId.value =
@@ -1263,6 +1286,18 @@ const toggleMenu = (menu) => {
 // Symbol Selection State
 const symbolSearchQuery = ref('');
 const activeSymbolCategory = ref('favorites');
+
+const categoryConfig = {
+  crypto: { label: '加密货币', icon: Bitcoin },
+  forex: { label: '外汇', icon: DollarSign },
+  stocks: { label: '股票', icon: BarChart2 },
+  indices: { label: '指数', icon: Activity },
+  commodities: { label: '商品', icon: Gem },
+};
+
+const getCategoryConfig = (category) => {
+  return categoryConfig[category] || { label: '其他', icon: Activity };
+};
 
 // Trading Pairs Data
 const tradingPairs = ref([
@@ -2423,6 +2458,7 @@ const priceToY = (price) => {
 };
 
 const timeToX = (time) => {
+  if (time === null || time === undefined) return null;
   return chart?.timeScale().timeToCoordinate(time) ?? null;
 };
 
@@ -2479,6 +2515,10 @@ const drawShape = (shape) => {
   }
 
   if (shape.type === 'rect') {
+    if (!shape.start || !shape.end) {
+      overlayCtx.restore();
+      return;
+    }
     const startX = timeToX(shape.start.time);
     const endX = timeToX(shape.end.time);
     const startY = priceToY(shape.start.price);
@@ -2503,6 +2543,10 @@ const drawShape = (shape) => {
     return;
   }
 
+  if (!shape.start || !shape.end) {
+    overlayCtx.restore();
+    return;
+  }
   const startX = timeToX(shape.start.time);
   const startY = priceToY(shape.start.price);
   const endX = timeToX(shape.end.time);
@@ -2825,6 +2869,17 @@ const pushNewSignal = () => {
 </script>
 
 <style scoped>
+/* 移除按钮点击时的白边（浏览器默认 focus outline） */
+button:focus,
+button:focus-visible,
+.btn-call:focus,
+.btn-put:focus,
+.nav-item:focus,
+.direction-btn:focus {
+  outline: none;
+  box-shadow: none;
+}
+
 .page-shell {
   min-height: 100vh;
   background: radial-gradient(circle at 20% 20%, rgba(108, 99, 255, 0.08), transparent 40%),
@@ -6284,5 +6339,153 @@ const pushNewSignal = () => {
 
 .btn-put:hover {
   box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3) !important;
+}
+
+/* Active Trade Card Compact Styles */
+.active-trade-card.compact {
+  background: #1e222d !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 8px !important;
+  padding: 8px 12px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.active-trade-card.compact:hover {
+  background: #262b36 !important;
+}
+
+.trade-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.asset-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.direction-tag-compact {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 4px;
+  line-height: 1.2;
+}
+
+.direction-tag-compact.call {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.direction-tag-compact.put {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.timer-compact {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: #eab308;
+}
+
+.timer-compact.urgent {
+  color: #ef4444;
+  animation: pulse-urgent 1s infinite;
+}
+
+.info-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #8fa1c4;
+}
+
+.value-compact {
+  color: #d1d5db;
+  font-weight: 500;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.value-compact.mono {
+  letter-spacing: -0.5px;
+}
+
+.separator {
+  color: #4b5563;
+  font-size: 10px;
+}
+
+.pnl-value {
+  font-weight: 700;
+}
+
+.label-compact {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+/* History Specifics */
+.history-card.compact {
+  border-left: 2px solid transparent !important;
+}
+
+.history-card.compact .pnl-value.won {
+  color: #10b981;
+}
+
+.history-card.compact .pnl-value.lost {
+  color: #ef4444;
+}
+
+.status-text {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-left: 4px;
+}
+
+.status-text.won {
+  color: #10b981;
+}
+
+.status-text.lost {
+  color: #ef4444;
+}
+
+.status-text.draw {
+  color: #9ca3af;
+}
+
+.pair-type-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #8fa1c4;
+  background: rgba(143, 161, 196, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  width: fit-content;
+  margin-top: 2px;
+}
+
+@keyframes pulse-urgent {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 </style>
